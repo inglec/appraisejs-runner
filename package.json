@@ -1,0 +1,20 @@
+{
+  "name": "docker",
+  "version": "1.0.0",
+  "description": "Benchmark runner",
+  "main": "src/index.js",
+  "scripts": {
+    "test": "jest"
+  },
+  "author": "Ciarán Ingle",
+  "license": "ISC",
+  "dependencies": {
+    "find": "^0.2.9",
+    "lodash": "^4.17.11",
+    "promise-logging": "git+https://github.com/inglec/promise-logging.git",
+    "vm2": "^3.6.10"
+  },
+  "devDependencies": {
+    "jest": "^24.1.0"
+  }
+}
