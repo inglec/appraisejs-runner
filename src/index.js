@@ -6,8 +6,6 @@ const createPromiseLogger = require('promise-logging');
 const util = require('util');
 const { NodeVM } = require('vm2');
 
-const { status } = require('./benchmarks');
-
 const readFile = util.promisify(fs.readFile);
 
 const logger = createPromiseLogger('Benchmark');
