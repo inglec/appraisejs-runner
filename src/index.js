@@ -1,21 +1,25 @@
 const find = require('find');
 const fs = require('fs');
 const _ = require('lodash');
-const path = require('path');
-const createPromiseLogger = require('promise-logging');
 const util = require('util');
 const { NodeVM } = require('vm2');
 
+const {
+  // isAsync,
+  isPromise,
+} = require('./utils/async');
+const Timer = require('./utils/Timer');
+
 const readFile = util.promisify(fs.readFile);
 
-const logger = createPromiseLogger('Benchmark');
-
 // Promise wrapper for find.file.
-const findFiles = (pattern, root) => new Promise((resolve, reject) => {
-  find
-    .file(pattern, root, files => resolve(files))
-    .error(err => reject(err));
-});
+const findFiles = (pattern, root) => (
+  new Promise((resolve, reject) => {
+    find
+      .file(pattern, root, files => resolve(files))
+      .error(err => reject(err));
+  })
+);
 
 const discoverBenchmarkFiles = rootDir => findFiles(/\.benchmark.js$/, rootDir);
 
@@ -81,37 +85,58 @@ const runBenchmark = (
   id,
   name,
   benchmark,
-  runs = 1,
-  timeout = 1000,
-  maxAttempts = 1,
+  // runs = 1,
+  // timeout = 1000,
+  // maxAttempts = 1,
 ) => {
-  if (typeof benchmark === 'function') {
-    logger.info(`Running benchmark '${id}'`);
-    benchmark();
-    return Promise.resolve();
+  if (typeof benchmark !== 'function') {
+    return Promise.reject(new Error(`no benchmark defined for '${id}'`));
   }
-  else {
-    return Promise.reject(`No benchmark defined for '${id}'`);
-  }
+
+  const timer = new Timer();
+  timer.start();
+
+  // Run sandboxed benchmark.
+  const result = benchmark();
+
+  // Check if benchmark is async.
+
+
+  return isPromise(result)
+    ? result
+      .then(value => ({
+        time: timer.stop(),
+        result: value,
+      }))
+      .catch(error => ({
+        time: timer.stop(),
+        error,
+      }))
+    : Promise.resolve({
+      time: timer.stop(),
+      result,
+    });
 };
 
 const runBenchmarkCollection = (benchmarks) => {
-  const promises = _.map(benchmarks, (benchmark, id) => runBenchmark(
-    id,
-    benchmark.name,
-    benchmark.benchmark,
-    benchmark.runs,
-    benchmark.timeout,
-    benchmark.max_attempts,
+  const promises = _.map(benchmarks, (benchmark, id) => (
+    runBenchmark(
+      id,
+      benchmark.name,
+      benchmark.benchmark,
+      benchmark.runs,
+      benchmark.timeout,
+      benchmark.max_attempts,
+    )
   ));
 
   return Promise.all(promises);
 };
 
-const benchmarkProject = (rootDir) => {
-  return discoverBenchmarkFiles(rootDir)
+const benchmarkProject = rootDir => (
+  discoverBenchmarkFiles(rootDir)
     .then(getSandboxedBenchmarks)
     .then(values => Promise.all(values.map(runBenchmarkCollection)))
-};
+);
 
 module.exports = { benchmarkProject };
