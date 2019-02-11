@@ -1,8 +1,3 @@
-const isAsync = func => func.constructor.name === 'AsyncFunction';
+const isPromise = func => func.constructor.name === 'Promise';
 
-const isPromise = object => object.then === 'function';
-
-module.exports = {
-  isAsync,
-  isPromise,
-};
+module.exports = { isPromise };
