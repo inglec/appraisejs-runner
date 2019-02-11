@@ -10,7 +10,7 @@ class Timer {
 
   getElapsedTime() {
     if (this.startTime) {
-      const elapsed = process.hr_time(this.startTime);
+      const elapsed = process.hrtime(this.startTime);
       return this.toNanoseconds(elapsed) + this.totalElapsedTime;
     }
 
@@ -20,13 +20,13 @@ class Timer {
   start() {
     // Check if timer is already running.
     if (!this.startTime) {
-      this.startTime = process.hr_time();
+      this.startTime = process.hrtime();
     }
   }
 
   stop() {
-    const elapsed = process.hr_time(this.startTime);
-    this.totalElapsedTime += this.toNanoseconds(elapsed);
+    const elapsed = process.hrtime(this.startTime);
+    this.totalElapsedTime += this.constructor.toNanoseconds(elapsed);
     this.startTime = null;
 
     return this.totalElapsedTime;
