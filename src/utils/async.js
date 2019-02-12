@@ -1,3 +1,7 @@
+const _ = require('lodash');
+
 const isPromise = func => func.constructor.name === 'Promise';
 
-module.exports = { isPromise };
+const promiseMap = (...args) => Promise.all(_.map(...args));
+
+module.exports = { isPromise, promiseMap };

@@ -1,8 +1,17 @@
 const path = require('path');
 
-const benchmarkProject = require('../src/index');
+const {
+  benchmarkProject,
+  // createSandbox,
+  // discoverBenchmarkFiles,
+  // getSandboxedBenchmarks,
+  // runBenchmark,
+  // runBenchmarks,
+} = require('../src/index');
 
-test('Runs mock project', async () => {
-  const dir = path.join(__dirname, 'mock');
-  await benchmarkProject(dir);
+describe('benchmarkProject', () => {
+  test('runs \'test_project\'', () => {
+    const projectPath = path.join(__dirname, 'test_project');
+    return benchmarkProject(projectPath);
+  });
 });
