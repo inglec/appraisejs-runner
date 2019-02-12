@@ -149,4 +149,4 @@ const benchmarkProject = (rootDir) => {
     .then(resultsByFile => resultsByFile.forEach(logResults));
 };
 
-module.exports = { benchmarkProject };
+module.exports = benchmarkProject;
