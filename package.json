@@ -13,6 +13,7 @@
     "find": "^0.2.9",
     "lodash": "^4.17.11",
     "promise-logging": "git+https://github.com/inglec/promise-logging.git",
+    "tripwire": "^4.1.0",
     "vm2": "^3.6.10"
   },
   "devDependencies": {
