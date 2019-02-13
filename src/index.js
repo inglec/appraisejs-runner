@@ -1,149 +1,60 @@
-const find = require('find');
-const fs = require('fs');
+const { fork } = require('child_process');
+const _ = require('lodash');
+const path = require('path');
 const createPromiseLogger = require('promise-logging');
-const util = require('util');
-const { NodeVM } = require('vm2');
 
-const { isPromise, promiseMap } = require('./utils/async');
-const Timer = require('./utils/Timer');
+const { promiseWait, promisePartition } = require('./utils/async');
+const { findFiles } = require('./utils/files');
 
-const readFile = util.promisify(fs.readFile);
-
-// const TIMEOUT_MAX = 5000;
-
-// Promise wrapper for find.file.
-const findFiles = (pattern, root) => (
-  new Promise((resolve, reject) => {
-    find
-      .file(pattern, root, files => resolve(files))
-      .error(err => reject(err));
-  })
-);
+const CHILD_RUNNER_PATH = path.join(process.env.NODE_PATH, 'src', 'child_runner.js');
 
 const discoverBenchmarkFiles = rootDir => findFiles(/\.benchmark.js$/, rootDir);
 
-const getSandboxedBenchmarks = (vm, filepath) => (
-  // Run benchmark file in VM2 to get sandboxed module.exports.
-  readFile(filepath).then(contents => vm.run(contents, filepath))
+// eslint-disable-next-line
+const getBenchmarkIds = filepath => Object.keys(require(filepath));
+
+const spawnChildProcess = (filepath, benchmarkId) => (
+  // Create a child node process to run a single benchmark.
+  fork(CHILD_RUNNER_PATH, [`--filepath=${filepath}`, `--benchmark=${benchmarkId}`])
 );
 
-const runBenchmark = (id, benchmark) => {
-  const {
-    // name,
-    benchmark: benchmarkFunc,
-    // runs = 1,
-    // timeout = benchmark.timeout > TIMEOUT_MAX ? TIMEOUT_MAX : 1000,
-    // max_attempts: maxAttempts = 1,
-  } = benchmark;
+const awaitChildProcess = childProcess => (
+  new Promise((resolve, reject) => {
+    const onExit = event => (
+      (code, signal) => {
+        if (code === 0) {
+          resolve({ event, code, signal });
+        } else {
+          reject(Error(`Event "${event}" exited with status ${code} and signal "${signal}"`));
+        }
+      }
+    );
 
-  if (typeof benchmarkFunc !== 'function') {
-    return Promise.reject(new Error(`no benchmark defined for '${id}'`));
-  }
-
-  const timer = new Timer();
-  timer.start();
-
-  // Run sandboxed benchmark.
-  const result = benchmarkFunc();
-
-  // Check if function was asynchronous.
-  if (result && isPromise(result)) {
-    return result
-      .then(resolved => ({
-        time: timer.stop(),
-        result: resolved,
-      }))
-      .catch(error => ({
-        time: timer.stop(),
-        error,
-      }));
-  }
-
-  return Promise.resolve({
-    time: timer.stop(),
-    result,
-  });
-};
-
-const runBenchmarks = benchmarks => (
-  promiseMap(benchmarks, (benchmark, id) => (
-    // Convert errors when running benchmark.
-    // FIX: This is probably not good.
-    runBenchmark(id, benchmark).catch(error => Promise.resolve({ error }))
-  ))
+    childProcess
+      .on('close', onExit('close'))
+      .on('disconnect', () => resolve({ event: 'disconnect' }))
+      .on('error', error => reject(error))
+      .on('exit', onExit('exit'))
+      .on('message', (message, sendHandle) => console.log(message, sendHandle));
+  })
 );
-
-const createSandbox = () => new NodeVM({
-  console: 'inherit',
-  require: {
-    // Allow loading of external Node modules.
-    external: true,
-
-    // Whitelisted internal Node modules.
-    builtin: [
-      'async_hooks',
-      'assert',
-      'buffer',
-      // 'child_process',
-      'console',
-      'constants',
-      'crypto',
-      'cluster',
-      'dgram',
-      'dns',
-      'domain',
-      'events',
-      'fs',
-      'http',
-      'http2',
-      'https',
-      'inspector',
-      'module',
-      'net',
-      'os',
-      'path',
-      'perf_hooks',
-      'process',
-      'punycode',
-      'querystring',
-      'readline',
-      'repl',
-      'stream',
-      'string_decoder',
-      'sys',
-      'timers',
-      'tls',
-      'tty',
-      'url',
-      'util',
-      'v8',
-      // 'vm',
-      'zlib',
-    ],
-
-    // Load modules inside sandbox.
-    context: 'sandbox',
-  },
-});
 
 const benchmarkProject = (rootDir) => {
-  // Create VM2 sandbox to run benchmarks in.
-  const vm = createSandbox();
   const logger = createPromiseLogger('Benchmark');
 
-  const logResults = results => results.forEach(result => logger.info(result.time));
-
   return discoverBenchmarkFiles(rootDir)
-    .then(filepaths => promiseMap(filepaths, filepath => getSandboxedBenchmarks(vm, filepath)))
-    .then(benchmarksByFile => promiseMap(benchmarksByFile, runBenchmarks))
-    .then(resultsByFile => promiseMap(resultsByFile, logResults));
+    .then((filepaths) => {
+      const benchmarkIdsByFile = filepaths.map(getBenchmarkIds);
+      return _.zip(filepaths, benchmarkIdsByFile);
+    })
+    .then(logger.infoId)
+    .then(zipped => _.flatMap(zipped, ([filepath, benchmarkIds]) => (
+      benchmarkIds.map(benchmarkId => spawnChildProcess(filepath, benchmarkId))
+    )))
+    .then(childProcesses => promiseWait(childProcesses, awaitChildProcess))
+    .then(promisePartition)
+    .then(logger.infoId)
+    .then(logger.infoAwait('All done!'));
 };
 
-module.exports = {
-  benchmarkProject,
-  createSandbox,
-  discoverBenchmarkFiles,
-  getSandboxedBenchmarks,
-  runBenchmark,
-  runBenchmarks,
-};
+module.exports = benchmarkProject;

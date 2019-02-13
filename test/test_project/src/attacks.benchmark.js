@@ -14,6 +14,6 @@ const requireBlacklistedModules = {
 
 module.exports = {
   'attacks-exit-process': exitProcess,
-  'attacks-infinite-loop': infiniteLoop,
+  // 'attacks-infinite-loop': infiniteLoop,
   'attacks-require-blacklisted-modules': requireBlacklistedModules,
 };
