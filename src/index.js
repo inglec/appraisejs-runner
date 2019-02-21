@@ -1,60 +1,81 @@
-const { fork } = require('child_process');
 const _ = require('lodash');
-const path = require('path');
 const createPromiseLogger = require('promise-logging');
+const promiseUtils = require('promise-utils');
 
-const { promiseWait, promisePartition } = require('./utils/async');
 const { findFiles } = require('./utils/files');
-
-const CHILD_RUNNER_PATH = path.join(process.env.NODE_PATH, 'src', 'child_runner.js');
+const { awaitChildProcess, spawnChildProcess } = require('./child_process');
 
 const discoverBenchmarkFiles = rootDir => findFiles(/\.benchmark.js$/, rootDir);
 
+// TODO: `require` is dangerous. Replace with something else.
 // eslint-disable-next-line
 const getBenchmarkIds = filepath => Object.keys(require(filepath));
 
-const spawnChildProcess = (filepath, benchmarkId) => (
-  // Create a child node process to run a single benchmark.
-  fork(CHILD_RUNNER_PATH, [`--filepath=${filepath}`, `--benchmark=${benchmarkId}`])
-);
+const getBenchmarkIdsByFile = filepaths => _.zipObject(filepaths, filepaths.map(getBenchmarkIds));
 
-const awaitChildProcess = childProcess => (
-  new Promise((resolve, reject) => {
-    const onExit = event => (
-      (code, signal) => {
-        if (code === 0) {
-          resolve({ event, code, signal });
-        } else {
-          reject(Error(`Event "${event}" exited with status ${code} and signal "${signal}"`));
-        }
+// Check that each benchmark ID is unique across all benchmark files.
+const verifyUniqueBenchmarkIds = (benchmarkIdsByFile) => {
+  // Reverse mapping of { filepath: [benchmarkId] } to { benchmarkId: [filepath] }.
+  const filesByBenchmarkId = _.reduce(benchmarkIdsByFile, (acc, benchmarkIds, filepath) => {
+    benchmarkIds.forEach((benchmarkId) => {
+      if (benchmarkId in acc) {
+        acc[benchmarkId].push(filepath);
+      } else {
+        acc[benchmarkId] = [filepath];
       }
-    );
+    });
 
-    childProcess
-      .on('close', onExit('close'))
-      .on('disconnect', () => resolve({ event: 'disconnect' }))
-      .on('error', error => reject(error))
-      .on('exit', onExit('exit'))
-      .on('message', (message, sendHandle) => console.log(message, sendHandle));
-  })
-);
+    return acc;
+  }, {});
+
+  const duplicateBenchmarkIds = _.pickBy(filesByBenchmarkId, files => files.length > 1);
+
+  if (_.isEmpty(duplicateBenchmarkIds)) {
+    return Promise.resolve(benchmarkIdsByFile);
+  }
+
+  // Log all duplicate benchmark IDs with their filepaths.
+  const error = _
+    .map(duplicateBenchmarkIds, (filepaths, benchmarkId) => {
+      const files = filepaths.map(filepath => `"${filepath}"`).join(', ');
+
+      // TODO: Trim start of filepaths to only include relative paths for test directory.
+      return (
+        `Duplicate benchmark ID "${benchmarkId}" found in ${filepaths.length} files: ${files}`
+      );
+    })
+    .join('\n');
+
+  return Promise.reject(Error(error));
+};
+
+const runBenchmarksInSequence = (benchmarkIdsByFile) => {
+  // Create array of { filepath, benchmarkId } objects.
+  const pairs = _.reduce(benchmarkIdsByFile, (acc, benchmarkIds, filepath) => {
+    benchmarkIds.forEach(benchmarkId => acc.push({ filepath, benchmarkId }));
+    return acc;
+  }, []);
+
+  // Create promise-creator for each benchmark to be run.
+  const queue = pairs.map(({ filepath, benchmarkId }) => (
+    () => {
+      const childProcess = spawnChildProcess(filepath, benchmarkId);
+      return awaitChildProcess(childProcess);
+    }
+  ));
+
+  // Run each benchmark one-at-a-time.
+  return promiseUtils.queue(queue);
+};
 
 const benchmarkProject = (rootDir) => {
   const logger = createPromiseLogger('Benchmark');
 
   return discoverBenchmarkFiles(rootDir)
-    .then((filepaths) => {
-      const benchmarkIdsByFile = filepaths.map(getBenchmarkIds);
-      return _.zip(filepaths, benchmarkIdsByFile);
-    })
-    .then(logger.infoId)
-    .then(zipped => _.flatMap(zipped, ([filepath, benchmarkIds]) => (
-      benchmarkIds.map(benchmarkId => spawnChildProcess(filepath, benchmarkId))
-    )))
-    .then(childProcesses => promiseWait(childProcesses, awaitChildProcess))
-    .then(promisePartition)
-    .then(logger.infoId)
-    .then(logger.infoAwait('All done!'));
+    .then(getBenchmarkIdsByFile)
+    .then(verifyUniqueBenchmarkIds)
+    .then(runBenchmarksInSequence)
+    .then(logger.infoId);
 };
 
 module.exports = benchmarkProject;

@@ -13,8 +13,9 @@
     "command-line-args": "^5.0.2",
     "find": "^0.2.9",
     "lodash": "^4.17.11",
+    "logging": "^3.2.0",
     "promise-logging": "git+https://github.com/inglec/promise-logging.git",
-    "tripwire": "^4.1.0",
+    "promise-utils": "git+https://github.com/inglec/promise-utils.git",
     "vm2": "^3.6.10"
   },
   "devDependencies": {
