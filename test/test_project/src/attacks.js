@@ -1,4 +1,4 @@
-const exitProcess = process.exit;
+const exitProcess = () => process.exit();
 
 const infiniteLoop = () => {
   // eslint-disable-next-line no-constant-condition

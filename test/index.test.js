@@ -2,10 +2,14 @@ const path = require('path');
 
 const benchmarkProject = require('../src/index');
 
-describe('benchmarkProject', () => {
-  test('runs \'test_project\'', () => {
-    const projectPath = path.join(__dirname, 'test_project');
+const ASYNC_TIMEOUT = 60000;
 
-    return benchmarkProject(projectPath);
-  });
+const projectPath = path.join(__dirname, 'test_project');
+
+describe('benchmarkProject', () => {
+  test('runs "test_project"', () => (
+    expect(benchmarkProject(projectPath))
+      .resolves
+      .toEqual(expect.arrayContaining([]))
+  ), ASYNC_TIMEOUT);
 });
