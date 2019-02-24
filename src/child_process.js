@@ -43,7 +43,7 @@ const awaitChildProcess = childProcess => (
           // Kill child process if fails to exit within the timeout.
           setTimeout(() => {
             if (running) {
-              reject(Error('Timeout'));
+              reject(Error('timeout'));
               childProcess.kill();
             }
           }, BENCHMARK_TIMEOUT);
@@ -55,7 +55,6 @@ const awaitChildProcess = childProcess => (
         }
         case ERROR: {
           running = false;
-          // console.error(message.error);
           reject(Error(message.body));
           break;
         }
@@ -63,7 +62,7 @@ const awaitChildProcess = childProcess => (
           resolve(message.body);
           break;
         default:
-          reject(Error(`Unmatched message type ${message}`));
+          reject(Error(`unmatched message type ${message}`));
       }
     };
 

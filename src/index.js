@@ -1,17 +1,33 @@
+const listModuleExports = require('list-module-exports');
 const _ = require('lodash');
 const createPromiseLogger = require('promise-logging');
-const promiseUtils = require('promise-utils');
+const { queue: queuePromises } = require('promise-utils');
 
 const { findFiles } = require('./utils/files');
 const { awaitChildProcess, spawnChildProcess } = require('./child_process');
+const whitelistedModules = require('./whitelisted_modules');
 
 const discoverBenchmarkFiles = rootDir => findFiles(/\.benchmark.js$/, rootDir);
 
-// TODO: `require` is dangerous. Replace with something else.
-// eslint-disable-next-line
-const getBenchmarkIds = filepath => Object.keys(require(filepath));
+const getBenchmarkIdsByFile = (filepaths) => {
+  // Safely list `module.exports` of a passed file.
+  const getBenchmarkIds = filepath => (
+    listModuleExports(filepath, whitelistedModules, true)
+      .then(benchmarkIds => ({ filepath, benchmarkIds }))
+      .catch(error => ({ filepath, error }))
+  );
 
-const getBenchmarkIdsByFile = filepaths => _.zipObject(filepaths, filepaths.map(getBenchmarkIds));
+  return Promise
+    .all(filepaths.map(getBenchmarkIds))
+    .then(values => (
+      // Transform array of objects into object.
+      values.reduce((acc, { filepath, benchmarkIds, error }) => {
+        acc[filepath] = benchmarkIds || error;
+
+        return acc;
+      }, {})
+    ));
+};
 
 // Check that each benchmark ID is unique across all benchmark files.
 const verifyUniqueBenchmarkIds = (benchmarkIdsByFile) => {
@@ -65,7 +81,7 @@ const runBenchmarksInSequence = (benchmarkIdsByFile) => {
   ));
 
   // Run each benchmark one-at-a-time.
-  return promiseUtils.queue(queue);
+  return queuePromises(queue);
 };
 
 const benchmarkProject = (rootDir) => {
@@ -73,6 +89,22 @@ const benchmarkProject = (rootDir) => {
 
   return discoverBenchmarkFiles(rootDir)
     .then(getBenchmarkIdsByFile)
+    .then((benchmarkIdsByFile) => {
+      // Split into successes and failures..
+      const { resolved, rejected } = _.reduce(
+        benchmarkIdsByFile,
+        (acc, value, filepath) => {
+          acc[value instanceof Error ? 'rejected' : 'resolved'][filepath] = value;
+
+          return acc;
+        },
+        { rejected: {}, resolved: {} },
+      );
+
+      _.forEach(rejected, (error, filepath) => logger.error(filepath, error));
+
+      return resolved;
+    })
     .then(verifyUniqueBenchmarkIds)
     .then(runBenchmarksInSequence)
     .then(logger.infoId);
