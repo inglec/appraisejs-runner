@@ -1,17 +1,15 @@
 const path = require('path');
 
-const {
-  benchmarkProject,
-  // createSandbox,
-  // discoverBenchmarkFiles,
-  // getSandboxedBenchmarks,
-  // runBenchmark,
-  // runBenchmarks,
-} = require('../src/index');
+const benchmarkProject = require('../src/index');
+
+const ASYNC_TIMEOUT = 60000;
+
+const projectPath = path.join(__dirname, 'test_project');
 
 describe('benchmarkProject', () => {
-  test('runs \'test_project\'', () => {
-    const projectPath = path.join(__dirname, 'test_project');
-    return benchmarkProject(projectPath);
-  });
+  test('runs "test_project"', () => (
+    expect(benchmarkProject(projectPath))
+      .resolves
+      .toEqual(expect.arrayContaining([]))
+  ), ASYNC_TIMEOUT);
 });

@@ -1,149 +1,113 @@
-const find = require('find');
-const fs = require('fs');
+const listModuleExports = require('list-module-exports');
+const _ = require('lodash');
 const createPromiseLogger = require('promise-logging');
-const util = require('util');
-const { NodeVM } = require('vm2');
+const { queue: queuePromises } = require('promise-utils');
 
-const { isPromise, promiseMap } = require('./utils/async');
-const Timer = require('./utils/Timer');
-
-const readFile = util.promisify(fs.readFile);
-
-// const TIMEOUT_MAX = 5000;
-
-// Promise wrapper for find.file.
-const findFiles = (pattern, root) => (
-  new Promise((resolve, reject) => {
-    find
-      .file(pattern, root, files => resolve(files))
-      .error(err => reject(err));
-  })
-);
+const { findFiles } = require('./utils/files');
+const { awaitChildProcess, spawnChildProcess } = require('./child_process');
+const whitelistedModules = require('./whitelisted_modules');
 
 const discoverBenchmarkFiles = rootDir => findFiles(/\.benchmark.js$/, rootDir);
 
-const getSandboxedBenchmarks = (vm, filepath) => (
-  // Run benchmark file in VM2 to get sandboxed module.exports.
-  readFile(filepath).then(contents => vm.run(contents, filepath))
-);
+const getBenchmarkIdsByFile = (filepaths) => {
+  // Safely list `module.exports` of a passed file.
+  const getBenchmarkIds = filepath => (
+    listModuleExports(filepath, whitelistedModules, true)
+      .then(benchmarkIds => ({ filepath, benchmarkIds }))
+      .catch(error => ({ filepath, error }))
+  );
 
-const runBenchmark = (id, benchmark) => {
-  const {
-    // name,
-    benchmark: benchmarkFunc,
-    // runs = 1,
-    // timeout = benchmark.timeout > TIMEOUT_MAX ? TIMEOUT_MAX : 1000,
-    // max_attempts: maxAttempts = 1,
-  } = benchmark;
+  return Promise
+    .all(filepaths.map(getBenchmarkIds))
+    .then(values => (
+      // Transform array of objects into object.
+      values.reduce((acc, { filepath, benchmarkIds, error }) => {
+        acc[filepath] = benchmarkIds || error;
 
-  if (typeof benchmarkFunc !== 'function') {
-    return Promise.reject(new Error(`no benchmark defined for '${id}'`));
-  }
-
-  const timer = new Timer();
-  timer.start();
-
-  // Run sandboxed benchmark.
-  const result = benchmarkFunc();
-
-  // Check if function was asynchronous.
-  if (result && isPromise(result)) {
-    return result
-      .then(resolved => ({
-        time: timer.stop(),
-        result: resolved,
-      }))
-      .catch(error => ({
-        time: timer.stop(),
-        error,
-      }));
-  }
-
-  return Promise.resolve({
-    time: timer.stop(),
-    result,
-  });
+        return acc;
+      }, {})
+    ));
 };
 
-const runBenchmarks = benchmarks => (
-  promiseMap(benchmarks, (benchmark, id) => (
-    // Convert errors when running benchmark.
-    // FIX: This is probably not good.
-    runBenchmark(id, benchmark).catch(error => Promise.resolve({ error }))
-  ))
-);
+// Check that each benchmark ID is unique across all benchmark files.
+const verifyUniqueBenchmarkIds = (benchmarkIdsByFile) => {
+  // Reverse mapping of { filepath: [benchmarkId] } to { benchmarkId: [filepath] }.
+  const filesByBenchmarkId = _.reduce(benchmarkIdsByFile, (acc, benchmarkIds, filepath) => {
+    benchmarkIds.forEach((benchmarkId) => {
+      if (benchmarkId in acc) {
+        acc[benchmarkId].push(filepath);
+      } else {
+        acc[benchmarkId] = [filepath];
+      }
+    });
 
-const createSandbox = () => new NodeVM({
-  console: 'inherit',
-  require: {
-    // Allow loading of external Node modules.
-    external: true,
+    return acc;
+  }, {});
 
-    // Whitelisted internal Node modules.
-    builtin: [
-      'async_hooks',
-      'assert',
-      'buffer',
-      // 'child_process',
-      'console',
-      'constants',
-      'crypto',
-      'cluster',
-      'dgram',
-      'dns',
-      'domain',
-      'events',
-      'fs',
-      'http',
-      'http2',
-      'https',
-      'inspector',
-      'module',
-      'net',
-      'os',
-      'path',
-      'perf_hooks',
-      'process',
-      'punycode',
-      'querystring',
-      'readline',
-      'repl',
-      'stream',
-      'string_decoder',
-      'sys',
-      'timers',
-      'tls',
-      'tty',
-      'url',
-      'util',
-      'v8',
-      // 'vm',
-      'zlib',
-    ],
+  const duplicateBenchmarkIds = _.pickBy(filesByBenchmarkId, files => files.length > 1);
 
-    // Load modules inside sandbox.
-    context: 'sandbox',
-  },
-});
+  if (_.isEmpty(duplicateBenchmarkIds)) {
+    return Promise.resolve(benchmarkIdsByFile);
+  }
+
+  // Log all duplicate benchmark IDs with their filepaths.
+  const error = _
+    .map(duplicateBenchmarkIds, (filepaths, benchmarkId) => {
+      const files = filepaths.map(filepath => `"${filepath}"`).join(', ');
+
+      // TODO: Trim start of filepaths to only include relative paths for test directory.
+      return (
+        `Duplicate benchmark ID "${benchmarkId}" found in ${filepaths.length} files: ${files}`
+      );
+    })
+    .join('\n');
+
+  return Promise.reject(Error(error));
+};
+
+const runBenchmarksInSequence = (benchmarkIdsByFile) => {
+  // Create array of { filepath, benchmarkId } objects.
+  const pairs = _.reduce(benchmarkIdsByFile, (acc, benchmarkIds, filepath) => {
+    benchmarkIds.forEach(benchmarkId => acc.push({ filepath, benchmarkId }));
+    return acc;
+  }, []);
+
+  // Create promise-creator for each benchmark to be run.
+  const queue = pairs.map(({ filepath, benchmarkId }) => (
+    () => {
+      const childProcess = spawnChildProcess(filepath, benchmarkId);
+      return awaitChildProcess(childProcess);
+    }
+  ));
+
+  // Run each benchmark one-at-a-time.
+  return queuePromises(queue);
+};
 
 const benchmarkProject = (rootDir) => {
-  // Create VM2 sandbox to run benchmarks in.
-  const vm = createSandbox();
   const logger = createPromiseLogger('Benchmark');
 
-  const logResults = results => results.forEach(result => logger.info(result.time));
-
   return discoverBenchmarkFiles(rootDir)
-    .then(filepaths => promiseMap(filepaths, filepath => getSandboxedBenchmarks(vm, filepath)))
-    .then(benchmarksByFile => promiseMap(benchmarksByFile, runBenchmarks))
-    .then(resultsByFile => promiseMap(resultsByFile, logResults));
+    .then(getBenchmarkIdsByFile)
+    .then((benchmarkIdsByFile) => {
+      // Split into successes and failures..
+      const { resolved, rejected } = _.reduce(
+        benchmarkIdsByFile,
+        (acc, value, filepath) => {
+          acc[value instanceof Error ? 'rejected' : 'resolved'][filepath] = value;
+
+          return acc;
+        },
+        { rejected: {}, resolved: {} },
+      );
+
+      _.forEach(rejected, (error, filepath) => logger.error(filepath, error));
+
+      return resolved;
+    })
+    .then(verifyUniqueBenchmarkIds)
+    .then(runBenchmarksInSequence)
+    .then(logger.infoId);
 };
 
-module.exports = {
-  benchmarkProject,
-  createSandbox,
-  discoverBenchmarkFiles,
-  getSandboxedBenchmarks,
-  runBenchmark,
-  runBenchmarks,
-};
+module.exports = benchmarkProject;
