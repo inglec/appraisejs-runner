@@ -1,6 +1,6 @@
 const path = require('path');
 
-const benchmarkProject = require('../src/index');
+const benchmarkProject = require('../src/benchmark');
 
 const ASYNC_TIMEOUT = 60000;
 

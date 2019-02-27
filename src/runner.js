@@ -4,27 +4,16 @@ const { isPromise } = require('promise-utils');
 const util = require('util');
 const { NodeVM } = require('vm2');
 
+const Timer = require('./utils/Timer');
 const {
   BEGIN_BENCHMARK,
   END_BENCHMARK,
   ERROR,
   RESULT,
 } = require('./message_types');
-const Timer = require('./utils/Timer');
 const whitelistedModules = require('./whitelisted_modules');
 
 const readFile = util.promisify(fs.readFile);
-
-const createSandbox = () => (
-  new NodeVM({
-    // console: 'off',
-    require: {
-      external: true,
-      builtin: whitelistedModules,
-      context: 'sandbox',
-    },
-  })
-);
 
 const getSandboxedBenchmarks = (vm, filepath) => (
   // Compile benchmark file in VM2 to get sandboxed `module.exports`.
@@ -98,7 +87,14 @@ function main() {
     process.exit(1);
   }
 
-  const vm = createSandbox();
+  const vm = new NodeVM({
+    // console: 'off',
+    require: {
+      external: true,
+      builtin: whitelistedModules,
+      context: 'sandbox',
+    },
+  });
 
   getSandboxedBenchmarks(vm, filepath)
     .then(sandbox => runBenchmark(benchmarkId, sandbox[benchmarkId]))

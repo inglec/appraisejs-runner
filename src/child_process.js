@@ -12,10 +12,7 @@ const BENCHMARK_TIMEOUT = 5000;
 const CHILD_RUNNER_PATH = path.join(process.env.NODE_PATH, 'src', 'runner.js');
 
 const spawnChildProcess = (filepath, benchmarkId) => (
-  fork(CHILD_RUNNER_PATH, [
-    `--filepath=${filepath}`,
-    `--benchmark=${benchmarkId}`,
-  ])
+  fork(CHILD_RUNNER_PATH, [`--filepath=${filepath}`, `--benchmark=${benchmarkId}`])
 );
 
 const awaitChildProcess = childProcess => (
@@ -40,7 +37,7 @@ const awaitChildProcess = childProcess => (
         case BEGIN_BENCHMARK: {
           running = true;
 
-          // Kill child process if fails to exit within the timeout.
+          // Kill child process if it fails to exit within the timeout
           setTimeout(() => {
             if (running) {
               reject(Error('timeout'));
@@ -66,7 +63,7 @@ const awaitChildProcess = childProcess => (
       }
     };
 
-    // Attach event handlers.
+    // Attach event handlers
     childProcess
       .on('error', onError)
       .on('exit', onExit)
@@ -74,8 +71,12 @@ const awaitChildProcess = childProcess => (
   })
 );
 
+const runChildProcess = (filepath, benchmarkId) => (
+  awaitChildProcess(spawnChildProcess(filepath, benchmarkId))
+);
 
 module.exports = {
   awaitChildProcess,
+  runChildProcess,
   spawnChildProcess,
 };
