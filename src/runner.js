@@ -36,33 +36,36 @@ const runBenchmark = (id, benchmark) => {
 
   const timer = new Timer();
 
+  // Run sandboxed benchmark.
   sendMessage(BEGIN_BENCHMARK);
   timer.start();
+  const benchmarked = benchmarkFunc();
 
-  // Run sandboxed benchmark.
-  const result = benchmarkFunc();
+  // Check if benchmark is asynchronous.
+  if (isPromise(benchmarked)) {
+    const onResolve = (result) => {
+      const time = timer.stop();
 
-  // Check if function was asynchronous.
-  if (isPromise(result)) {
-    return result
-      .then(resolved => ({
-        time: timer.stop(),
-        result: resolved,
-      }))
-      .catch(error => ({
-        time: timer.stop(),
-        error,
-      }))
+      return { result, time };
+    };
+
+    const onReject = (error) => {
+      const time = timer.stop();
+
+      return { error, time };
+    };
+
+    return benchmarked
+      .then(onResolve)
+      .catch(onReject)
       .finally(() => sendMessage(END_BENCHMARK));
   }
 
   // Function was synchronous.
+  const time = timer.stop();
   sendMessage(END_BENCHMARK);
 
-  return Promise.resolve({
-    time: timer.stop(),
-    result,
-  });
+  return { result: benchmarked, time };
 };
 
 function main() {
