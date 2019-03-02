@@ -1,10 +1,15 @@
-const path = require('path');
+const { join } = require('path');
 
 const benchmarkProject = require('../src/benchmark');
 
 const ASYNC_TIMEOUT = 60000;
 
-const projectPath = path.join(__dirname, 'test_project');
+const projectPath = join(__dirname, 'test_project');
+
+beforeAll(() => {
+  // FIXME
+  process.env.NODE_PATH = join(__dirname, '..');
+});
 
 describe('benchmarkProject', () => {
   test('runs "test_project"', () => (
