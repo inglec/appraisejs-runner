@@ -1,5 +1,10 @@
 const listModuleExports = require('list-module-exports');
-const _ = require('lodash');
+const {
+  assign,
+  forEach,
+  isEmpty,
+  reduce,
+} = require('lodash');
 const createPromiseLogger = require('promise-logging');
 const { queue: queuePromises } = require('promise-utils');
 
@@ -10,7 +15,7 @@ const whitelistedModules = require('./whitelisted_modules');
 
 const promisePipe = new PromisePipe();
 
-const discoverBenchmarkFiles = rootDir => findFiles(/\.benchmark.js$/, rootDir);
+const discoverBenchmarkFiles = projectPath => findFiles(/\.benchmark.js$/, projectPath);
 
 const getBenchmarkIdsByFile = (...args) => {
   const [filepaths] = promisePipe.args(...args);
@@ -22,9 +27,8 @@ const getBenchmarkIdsByFile = (...args) => {
     listModuleExports(filepath, whitelistedModules, true)
       .then(benchmarkIds => ({ [filepath]: benchmarkIds }))
       .catch((error) => {
-        errors.push(
-          Error(`error in "${stripRoot(filepath, process.env.NODE_PATH)}": ${error.message}`),
-        );
+        const projectPath = stripRoot(filepath, process.env.NODE_PATH);
+        errors.push(Error(`error in "${projectPath}": ${error.message}`));
 
         return undefined;
       }));
@@ -33,7 +37,7 @@ const getBenchmarkIdsByFile = (...args) => {
     .all(filepaths.map(getBenchmarkIds))
     .then((values) => {
       // Merge each `values` object into a single object.
-      const result = _.assign({}, ...values);
+      const result = assign({}, ...values);
 
       return promisePipe.return(result, errors, 'getBenchmarkIds');
     });
@@ -44,7 +48,7 @@ const filterUniqueBenchmarkIds = (...args) => {
   const [benchmarkIdsByFile] = promisePipe.args(...args);
 
   // Reverse mapping of { filepath: [benchmarkId] } to { benchmarkId: [filepath] }
-  const filesByBenchmarkId = _.reduce(benchmarkIdsByFile, (acc, benchmarkIds, filepath) => {
+  const filesByBenchmarkId = reduce(benchmarkIdsByFile, (acc, benchmarkIds, filepath) => {
     benchmarkIds.forEach((benchmarkId) => {
       if (benchmarkId in acc) {
         acc[benchmarkId].push(filepath);
@@ -57,11 +61,12 @@ const filterUniqueBenchmarkIds = (...args) => {
   }, {});
 
   // Get unique benchmark IDs
-  const { errors, unique } = _.reduce(
+  const { errors, unique } = reduce(
     filesByBenchmarkId,
     (acc, filepaths, benchmarkId) => {
       const count = filepaths.length;
 
+      // Check if benchmark occurs in multiple files.
       if (count === 1) {
         // Reconstruct "benchmarkIdsByFile" with just unique benchmarks.
         const filepath = filepaths[0];
@@ -93,7 +98,7 @@ const runBenchmarksInSequence = (...args) => {
   const [benchmarkIdsByFile] = promisePipe.args(...args);
 
   // Create promise-creator for each benchmark to be run
-  const queue = _.reduce(benchmarkIdsByFile, (acc, benchmarkIds, filepath) => {
+  const queue = reduce(benchmarkIdsByFile, (acc, benchmarkIds, filepath) => {
     benchmarkIds.forEach((benchmarkId) => {
       acc[benchmarkId] = () => runChildProcess(filepath, benchmarkId);
     });
@@ -107,11 +112,11 @@ const runBenchmarksInSequence = (...args) => {
   ));
 };
 
-const benchmarkProject = (rootDir) => {
+const benchmarkProject = (projectPath) => {
   const logger = createPromiseLogger('appraisejs');
 
   logger.debug('Finding benchmark files');
-  return discoverBenchmarkFiles(rootDir)
+  return discoverBenchmarkFiles(projectPath)
     .then(logger.debugAwait('Getting benchmarks from files'))
     .then(getBenchmarkIdsByFile)
     .then(logger.debugAwait('Filtering benchmarks by unique ID'))
@@ -123,11 +128,11 @@ const benchmarkProject = (rootDir) => {
       logger.debug('Benchmark results:', result);
 
       // Log all errors encountered along the chain
-      _.forEach(errors, (stage) => {
+      forEach(errors, (stage) => {
         const stageName = Object.keys(stage)[0];
         const stageErrors = Object.values(stage)[0];
 
-        if (!_.isEmpty(stageErrors)) {
+        if (!isEmpty(stageErrors)) {
           logger.debug(`Errors at "${stageName}":`, stageErrors);
         }
       });
