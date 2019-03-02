@@ -1,6 +1,5 @@
 const commandLineArgs = require('command-line-args');
 const fs = require('fs');
-const { isPromise } = require('promise-utils');
 const util = require('util');
 const { NodeVM } = require('vm2');
 
@@ -22,7 +21,7 @@ const getSandboxedBenchmarks = (vm, filepath) => (
 
 const sendMessage = (type, body) => process.send({ type, body });
 
-const runBenchmark = (id, benchmark) => {
+const runBenchmark = (benchmarkId, benchmark) => {
   const {
     // name,
     benchmark: benchmarkFunc,
@@ -31,41 +30,42 @@ const runBenchmark = (id, benchmark) => {
   } = benchmark;
 
   if (typeof benchmarkFunc !== 'function') {
-    return Promise.reject(new Error(`no benchmark defined for "${id}"`));
+    throw Error(`no benchmark function defined for "${benchmarkId}"`);
   }
 
   const timer = new Timer();
 
   // Run sandboxed benchmark.
-  sendMessage(BEGIN_BENCHMARK);
+  sendMessage(BEGIN_BENCHMARK, { benchmarkId });
   timer.start();
+
   const benchmarked = benchmarkFunc();
 
   // Check if benchmark is asynchronous.
-  if (isPromise(benchmarked)) {
-    const onResolve = (result) => {
-      const time = timer.stop();
+  if (benchmarked instanceof Promise) {
+    const promise = benchmarked;
 
-      return { result, time };
-    };
-
-    const onReject = (error) => {
-      const time = timer.stop();
-
-      return { error, time };
-    };
-
-    return benchmarked
-      .then(onResolve)
-      .catch(onReject)
-      .finally(() => sendMessage(END_BENCHMARK));
+    return promise
+      .then((value) => {
+        const time = timer.stop();
+        return { time, value };
+      })
+      .catch((error) => {
+        const time = timer.stop();
+        return { time, error };
+      })
+      .then((result) => {
+        sendMessage(END_BENCHMARK, { benchmarkId });
+        return result;
+      });
   }
 
   // Function was synchronous.
   const time = timer.stop();
-  sendMessage(END_BENCHMARK);
+  const value = benchmarked;
+  sendMessage(END_BENCHMARK, { benchmarkId });
 
-  return { result: benchmarked, time };
+  return { value, time };
 };
 
 function main() {
@@ -74,10 +74,7 @@ function main() {
     { name: 'benchmark', type: String },
   ]);
 
-  const {
-    benchmark: benchmarkId,
-    filepath,
-  } = args;
+  const { benchmark: benchmarkId, filepath } = args;
 
   if (!filepath) {
     // eslint-disable-next-line no-console
@@ -101,8 +98,8 @@ function main() {
 
   getSandboxedBenchmarks(vm, filepath)
     .then(sandbox => runBenchmark(benchmarkId, sandbox[benchmarkId]))
-    .then(result => sendMessage(RESULT, result))
-    .catch(error => sendMessage(ERROR, error.message));
+    .then(result => sendMessage(RESULT, { benchmarkId, result }))
+    .catch(error => sendMessage(ERROR, { benchmarkId, error: error.message }));
 }
 
 main();

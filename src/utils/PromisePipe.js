@@ -1,10 +1,6 @@
 class PromisePipe {
   static isResult(obj) {
-    return (
-      typeof obj === 'object'
-      && Array.isArray(obj.errors)
-      && 'result' in obj
-    );
+    return typeof obj === 'object' && Array.isArray(obj.errors) && 'result' in obj;
   }
 
   args(...args) {
@@ -24,9 +20,10 @@ class PromisePipe {
       throw Error('`args` must be called before `return`');
     }
 
-    const nextErrors = this.errors.concat(key ? { [key]: errors } : errors);
-
-    return { result, errors: nextErrors };
+    return {
+      result,
+      errors: this.errors.concat(key ? { [key]: errors } : errors),
+    };
   }
 }
 

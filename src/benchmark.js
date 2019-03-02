@@ -71,7 +71,7 @@ const filterUniqueBenchmarkIds = (...args) => {
         // Reconstruct "benchmarkIdsByFile" with just unique benchmarks.
         const filepath = filepaths[0];
 
-        if (filepath in acc) {
+        if (filepath in acc.unique) {
           acc.unique[filepath].push(benchmarkId);
         } else {
           acc.unique[filepath] = [benchmarkId];
@@ -124,7 +124,6 @@ const benchmarkProject = (projectPath) => {
     .then(logger.debugAwait('Running benchmarks'))
     .then(runBenchmarksInSequence)
     .then(({ errors, result }) => {
-      // Log benchmark results
       logger.debug('Benchmark results:', result);
 
       // Log all errors encountered along the chain

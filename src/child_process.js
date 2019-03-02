@@ -1,4 +1,5 @@
 const { fork } = require('child_process');
+const { default: createLogger } = require('logging');
 const path = require('path');
 
 const {
@@ -9,7 +10,9 @@ const {
 } = require('./message_types');
 
 const BENCHMARK_TIMEOUT = 5000;
-const CHILD_RUNNER_PATH = path.join(process.env.NODE_PATH, 'src', 'runner.js');
+const CHILD_RUNNER_PATH = path.join(process.env.NODE_PATH, 'src/runner.js');
+
+const logger = createLogger('appraisejs:child');
 
 const spawnChildProcess = (filepath, benchmarkId) => (
   fork(CHILD_RUNNER_PATH, [`--filepath=${filepath}`, `--benchmark=${benchmarkId}`])
@@ -17,30 +20,41 @@ const spawnChildProcess = (filepath, benchmarkId) => (
 
 const awaitChildProcess = childProcess => (
   new Promise((resolve, reject) => {
-    const onError = error => reject(error);
-
-    const onExit = (code, signal) => {
-      const result = { event: 'exit', code, signal };
-
-      if (code === 0) {
-        resolve(result);
-      } else {
-        reject(Error(JSON.stringify(result)));
-      }
-    };
-
     // Is the process still running the benchmark?
     let running = false;
 
+    const onError = (error) => {
+      running = false;
+      reject(error);
+    };
+
+    const onExit = (code, signal) => {
+      running = false;
+
+      if (code !== 0) {
+        let message = `Exited with code ${code}`;
+        if (signal) {
+          message += `, signal: ${signal}`;
+        }
+        reject(Error(message));
+      }
+    };
+
     const onMessage = (message) => {
-      switch (message.type) {
+      const { body, type } = message;
+      const { benchmarkId, result, error: errorMessage } = body;
+      const error = errorMessage ? Error(errorMessage) : undefined;
+
+      logger.debug(benchmarkId, type, result || error);
+
+      switch (type) {
         case BEGIN_BENCHMARK: {
           running = true;
 
           // Kill child process if it fails to exit within the timeout
           setTimeout(() => {
             if (running) {
-              reject(Error('timeout'));
+              reject(Error(`timeout after ${BENCHMARK_TIMEOUT}ms`));
               childProcess.kill();
             }
           }, BENCHMARK_TIMEOUT);
@@ -52,18 +66,17 @@ const awaitChildProcess = childProcess => (
         }
         case ERROR: {
           running = false;
-          reject(Error(message.body));
+          reject(error);
           break;
         }
         case RESULT:
-          resolve(message.body);
+          resolve(result);
           break;
         default:
           reject(Error(`unmatched message type ${message}`));
       }
     };
 
-    // Attach event handlers
     childProcess
       .on('error', onError)
       .on('exit', onExit)
@@ -75,8 +88,4 @@ const runChildProcess = (filepath, benchmarkId) => (
   awaitChildProcess(spawnChildProcess(filepath, benchmarkId))
 );
 
-module.exports = {
-  awaitChildProcess,
-  runChildProcess,
-  spawnChildProcess,
-};
+module.exports = { awaitChildProcess, runChildProcess, spawnChildProcess };
