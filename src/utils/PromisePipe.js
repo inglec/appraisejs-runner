@@ -1,25 +1,26 @@
 class PromisePipe {
+  constructor() {
+    this.errors = [];
+  }
+
   static isResult(obj) {
     return typeof obj === 'object' && Array.isArray(obj.errors) && 'result' in obj;
   }
 
   args(...args) {
-    if (args.length === 1 && this.constructor.isResult(args[0])) {
-      const { errors, result } = args[0];
+    const [first, ...rest] = args;
+
+    if (this.constructor.isResult(first)) {
+      const { errors, result } = first;
       this.errors = errors;
 
-      return Array.isArray(result) ? result : [result];
+      return [result, ...rest];
     }
 
-    this.errors = [];
     return args;
   }
 
   return(result, errors, key) {
-    if (!this.errors) {
-      throw Error('`args` must be called before `return`');
-    }
-
     return {
       result,
       errors: this.errors.concat(key ? { [key]: errors } : errors),

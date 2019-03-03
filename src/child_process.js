@@ -1,6 +1,5 @@
 const { fork } = require('child_process');
 const { default: createLogger } = require('logging');
-const path = require('path');
 
 const {
   BEGIN_BENCHMARK,
@@ -10,12 +9,11 @@ const {
 } = require('./message_types');
 
 const BENCHMARK_TIMEOUT = 5000;
-const CHILD_RUNNER_PATH = path.join(process.env.NODE_PATH, 'src/runner.js');
 
 const logger = createLogger('appraisejs:child');
 
-const spawnChildProcess = (filepath, benchmarkId) => (
-  fork(CHILD_RUNNER_PATH, [`--filepath=${filepath}`, `--benchmark=${benchmarkId}`])
+const spawnChildProcess = (runnerPath, filepath, benchmarkId) => (
+  fork(runnerPath, [`--filepath=${filepath}`, `--benchmark=${benchmarkId}`])
 );
 
 const awaitChildProcess = childProcess => (
@@ -84,8 +82,8 @@ const awaitChildProcess = childProcess => (
   })
 );
 
-const runChildProcess = (filepath, benchmarkId) => (
-  awaitChildProcess(spawnChildProcess(filepath, benchmarkId))
+const runChildProcess = (runnerPath, filepath, benchmarkId) => (
+  awaitChildProcess(spawnChildProcess(runnerPath, filepath, benchmarkId))
 );
 
 module.exports = { awaitChildProcess, runChildProcess, spawnChildProcess };

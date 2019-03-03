@@ -9,7 +9,7 @@ function main() {
     throw Error('no path specified');
   }
 
-  benchmarkProject(args.path)
+  benchmarkProject(args.path, process.env.NODE_PATH)
     // eslint-disable-next-line
     .then(() => {
       /**

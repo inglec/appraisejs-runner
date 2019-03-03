@@ -5,6 +5,7 @@ const {
   isEmpty,
   reduce,
 } = require('lodash');
+const { join } = require('path');
 const createPromiseLogger = require('promise-logging');
 const { queue: queuePromises } = require('promise-utils');
 
@@ -18,8 +19,7 @@ const promisePipe = new PromisePipe();
 const discoverBenchmarkFiles = projectPath => findFiles(/\.benchmark.js$/, projectPath);
 
 const getBenchmarkIdsByFile = (...args) => {
-  const [filepaths] = promisePipe.args(...args);
-
+  const [filepaths, nodePath] = promisePipe.args(...args);
   const errors = [];
 
   // Safely list `module.exports` of a passed file
@@ -27,7 +27,7 @@ const getBenchmarkIdsByFile = (...args) => {
     listModuleExports(filepath, whitelistedModules, true)
       .then(benchmarkIds => ({ [filepath]: benchmarkIds }))
       .catch((error) => {
-        const projectPath = stripRoot(filepath, process.env.NODE_PATH);
+        const projectPath = stripRoot(filepath, nodePath);
         errors.push(Error(`error in "${projectPath}": ${error.message}`));
 
         return undefined;
@@ -45,7 +45,7 @@ const getBenchmarkIdsByFile = (...args) => {
 
 // Check that each benchmark ID is unique across all benchmark files
 const filterUniqueBenchmarkIds = (...args) => {
-  const [benchmarkIdsByFile] = promisePipe.args(...args);
+  const [benchmarkIdsByFile, nodePath] = promisePipe.args(...args);
 
   // Reverse mapping of { filepath: [benchmarkId] } to { benchmarkId: [filepath] }
   const filesByBenchmarkId = reduce(benchmarkIdsByFile, (acc, benchmarkIds, filepath) => {
@@ -77,10 +77,7 @@ const filterUniqueBenchmarkIds = (...args) => {
           acc.unique[filepath] = [benchmarkId];
         }
       } else {
-        const files = filepaths
-          .map(filepath => `"${stripRoot(filepath, process.env.NODE_PATH)}"`)
-          .join(', ');
-
+        const files = filepaths.map(filepath => `"${stripRoot(filepath, nodePath)}"`).join(', ');
         acc.errors.push(
           Error(`duplicate benchmark ID "${benchmarkId}" found in ${count} files: ${files}`),
         );
@@ -95,12 +92,13 @@ const filterUniqueBenchmarkIds = (...args) => {
 };
 
 const runBenchmarksInSequence = (...args) => {
-  const [benchmarkIdsByFile] = promisePipe.args(...args);
+  const [benchmarkIdsByFile, nodePath] = promisePipe.args(...args);
+  const runnerPath = join(nodePath, 'src/runner');
 
   // Create promise-creator for each benchmark to be run
   const queue = reduce(benchmarkIdsByFile, (acc, benchmarkIds, filepath) => {
     benchmarkIds.forEach((benchmarkId) => {
-      acc[benchmarkId] = () => runChildProcess(filepath, benchmarkId);
+      acc[benchmarkId] = () => runChildProcess(runnerPath, filepath, benchmarkId);
     });
 
     return acc;
@@ -112,17 +110,17 @@ const runBenchmarksInSequence = (...args) => {
   ));
 };
 
-const benchmarkProject = (projectPath) => {
+const benchmarkProject = (projectPath, nodePath) => {
   const logger = createPromiseLogger('appraisejs');
 
   logger.debug('Finding benchmark files');
   return discoverBenchmarkFiles(projectPath)
     .then(logger.debugAwait('Getting benchmarks from files'))
-    .then(getBenchmarkIdsByFile)
+    .then(result => getBenchmarkIdsByFile(result, nodePath))
     .then(logger.debugAwait('Filtering benchmarks by unique ID'))
-    .then(filterUniqueBenchmarkIds)
+    .then(result => filterUniqueBenchmarkIds(result, nodePath))
     .then(logger.debugAwait('Running benchmarks'))
-    .then(runBenchmarksInSequence)
+    .then(result => runBenchmarksInSequence(result, nodePath))
     .then(({ errors, result }) => {
       logger.debug('Benchmark results:', result);
 
