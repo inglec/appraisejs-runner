@@ -4,8 +4,7 @@
   "description": "Benchmark runner",
   "main": "src/index.js",
   "scripts": {
-    "lint": "eslint src",
-    "test": "NODE_PATH=. jest"
+    "lint": "eslint src"
   },
   "author": "Ciarán Ingle",
   "license": "ISC",

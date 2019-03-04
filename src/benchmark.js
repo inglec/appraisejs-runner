@@ -27,7 +27,9 @@ const getBenchmarkIdsByFile = (...args) => {
     listModuleExports(filepath, whitelistedModules, true)
       .then(benchmarkIds => ({ [filepath]: benchmarkIds }))
       .catch((error) => {
-        const projectPath = stripRoot(filepath, nodePath);
+        // TODO
+        // const projectPath = stripRoot(filepath, nodePath);
+        const projectPath = filepath;
         errors.push(Error(`error in "${projectPath}": ${error.message}`));
 
         return undefined;
@@ -77,7 +79,9 @@ const filterUniqueBenchmarkIds = (...args) => {
           acc.unique[filepath] = [benchmarkId];
         }
       } else {
-        const files = filepaths.map(filepath => `"${stripRoot(filepath, nodePath)}"`).join(', ');
+        // TODO
+        // const files = filepaths.map(filepath => `"${stripRoot(filepath, nodePath)}"`).join(', ');
+        const files = filepaths.map(filepath => `"${filepath}"`).join(', ');
         acc.errors.push(
           Error(`duplicate benchmark ID "${benchmarkId}" found in ${count} files: ${files}`),
         );
