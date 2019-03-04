@@ -97,7 +97,7 @@ const filterUniqueBenchmarkIds = (...args) => {
 
 const runBenchmarksInSequence = (...args) => {
   const [benchmarkIdsByFile, nodePath] = promisePipe.args(...args);
-  const runnerPath = join(nodePath, 'src/runner');
+  const runnerPath = join(nodePath, 'src/runner.js');
 
   // Create promise-creator for each benchmark to be run
   const queue = reduce(benchmarkIdsByFile, (acc, benchmarkIds, filepath) => {
