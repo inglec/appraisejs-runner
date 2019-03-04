@@ -1,7 +1,7 @@
 {
-  "name": "docker",
+  "name": "appraisejs-runner",
   "version": "1.0.0",
-  "description": "Benchmark runner",
+  "description": "The runner process created inside a worker's docker container",
   "main": "src/index.js",
   "scripts": {
     "lint": "eslint src"
