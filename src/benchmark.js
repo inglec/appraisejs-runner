@@ -3,6 +3,7 @@ const {
   assign,
   forEach,
   isEmpty,
+  mapValues,
   reduce,
 } = require('lodash');
 const { default: createLogger } = require('logging');
@@ -134,15 +135,30 @@ const logResults = ({ errors, result }) => {
 };
 
 // Send benchmark results to worker parent host
-const sendResults = (results, hostPort) => (
-  requestPromise({
+const sendResults = ({ errors, result }, hostPort) => {
+  const stringifiedErrors = errors.map((stage) => {
+    const stageName = Object.keys(stage)[0];
+    const stageErrors = Object.values(stage)[0];
+    const stringifiedStageErrors = (
+      Array.isArray(stageErrors)
+        ? stageErrors.map(error => error.message)
+        : mapValues(stageErrors, error => error.message)
+    );
+
+    return { [stageName]: stringifiedStageErrors };
+  });
+
+  return requestPromise({
     method: 'POST',
     uri: `http://localhost:${hostPort}/results`,
-    body: results,
+    body: {
+      errors: stringifiedErrors,
+      results: result,
+    },
     json: true,
     resolveWithFullResponse: true,
-  })
-);
+  });
+};
 
 const benchmarkProject = (projectPath, hostPort, nodePath) => {
   const logger = createPromiseLogger('appraisejs');
