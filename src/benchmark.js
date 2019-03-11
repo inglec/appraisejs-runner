@@ -5,9 +5,11 @@ const {
   isEmpty,
   reduce,
 } = require('lodash');
+const { default: createLogger } = require('logging');
 const { join } = require('path');
 const createPromiseLogger = require('promise-logging');
 const { queue: queuePromises } = require('promise-utils');
+const requestPromise = require('request-promise-native');
 
 const { findFiles, stripRoot } = require('./utils/files');
 const PromisePipe = require('./utils/PromisePipe');
@@ -38,7 +40,7 @@ const getBenchmarkIdsByFile = (...args) => {
   return Promise
     .all(filepaths.map(getBenchmarkIds))
     .then((values) => {
-      // Merge each `values` object into a single object.
+      // Merge each `values` object into a single object
       const result = assign({}, ...values);
 
       return promisePipe.return(result, errors, 'getBenchmarkIds');
@@ -68,9 +70,9 @@ const filterUniqueBenchmarkIds = (...args) => {
     (acc, filepaths, benchmarkId) => {
       const count = filepaths.length;
 
-      // Check if benchmark occurs in multiple files.
+      // Check if benchmark occurs in multiple files
       if (count === 1) {
-        // Reconstruct "benchmarkIdsByFile" with just unique benchmarks.
+        // Reconstruct "benchmarkIdsByFile" with just unique benchmarks
         const filepath = filepaths[0];
 
         if (filepath in acc.unique) {
@@ -114,32 +116,50 @@ const runBenchmarksInSequence = (...args) => {
   ));
 };
 
-const benchmarkProject = (projectPath, nodePath) => {
-  const logger = createPromiseLogger('appraisejs');
+const logResults = ({ errors, result }) => {
+  const logger = createLogger('appraisejs:results');
+  logger.debug('Benchmark results:', result);
 
+  // Log all errors encountered along the chain
+  forEach(errors, (stage) => {
+    const stageName = Object.keys(stage)[0];
+    const stageErrors = Object.values(stage)[0];
+
+    if (!isEmpty(stageErrors)) {
+      logger.debug(`Errors at "${stageName}":`, stageErrors);
+    }
+  });
+
+  return { errors, result };
+};
+
+// Send benchmark results to worker parent host
+const sendResults = (results, hostPort) => (
+  requestPromise({
+    method: 'POST',
+    uri: `http://localhost:${hostPort}/results`,
+    body: results,
+    json: true,
+    resolveWithFullResponse: true,
+  })
+);
+
+const benchmarkProject = (projectPath, hostPort, nodePath) => {
+  const logger = createPromiseLogger('appraisejs');
   logger.debug('Finding benchmark files');
+
   return discoverBenchmarkFiles(projectPath)
     .then(logger.debugAwait('Getting benchmarks from files'))
-    .then(result => getBenchmarkIdsByFile(result, nodePath))
+    .then(results => getBenchmarkIdsByFile(results, nodePath))
     .then(logger.debugAwait('Filtering benchmarks by unique ID'))
-    .then(result => filterUniqueBenchmarkIds(result, nodePath))
+    .then(results => filterUniqueBenchmarkIds(results, nodePath))
     .then(logger.debugAwait('Running benchmarks'))
-    .then(result => runBenchmarksInSequence(result, nodePath))
-    .then(({ errors, result }) => {
-      logger.debug('Benchmark results:', result);
-
-      // Log all errors encountered along the chain
-      forEach(errors, (stage) => {
-        const stageName = Object.keys(stage)[0];
-        const stageErrors = Object.values(stage)[0];
-
-        if (!isEmpty(stageErrors)) {
-          logger.debug(`Errors at "${stageName}":`, stageErrors);
-        }
-      });
-
-      return undefined;
-    });
+    .then(results => runBenchmarksInSequence(results, nodePath))
+    .then(results => logResults(results))
+    .then(logger.debugAwait('Sending results to worker'))
+    .then(results => sendResults(results, hostPort))
+    .then(({ statusCode }) => logger.info('Worker responded with status', statusCode))
+    .catch(error => logger.error(error));
 };
 
 module.exports = benchmarkProject;

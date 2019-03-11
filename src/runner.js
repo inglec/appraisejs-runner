@@ -15,7 +15,7 @@ const whitelistedModules = require('./whitelisted_modules');
 const readFile = util.promisify(fs.readFile);
 
 const getSandboxedBenchmarks = (vm, filepath) => (
-  // Compile benchmark file in VM2 to get sandboxed `module.exports`.
+  // Compile benchmark file in VM2 to get sandboxed `module.exports`
   readFile(filepath).then(contents => vm.run(contents, filepath))
 );
 
@@ -35,13 +35,13 @@ const runBenchmark = (benchmarkId, benchmark) => {
 
   const timer = new Timer();
 
-  // Run sandboxed benchmark.
+  // Run sandboxed benchmark
   sendMessage(BEGIN_BENCHMARK, { benchmarkId });
   timer.start();
 
   const benchmarked = benchmarkFunc();
 
-  // Check if benchmark is asynchronous.
+  // Check if benchmark is asynchronous
   if (benchmarked instanceof Promise) {
     const promise = benchmarked;
 
@@ -60,7 +60,7 @@ const runBenchmark = (benchmarkId, benchmark) => {
       });
   }
 
-  // Function was synchronous.
+  // Function was synchronous
   const time = timer.stop();
   const value = benchmarked;
   sendMessage(END_BENCHMARK, { benchmarkId });

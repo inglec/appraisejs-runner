@@ -17,6 +17,8 @@
     "logging": "^3.2.0",
     "promise-logging": "git+https://github.com/inglec/promise-logging.git",
     "promise-utils": "git+https://github.com/inglec/promise-utils.git",
+    "request": "^2.88.0",
+    "request-promise-native": "^1.0.7",
     "vm2": "^3.6.10"
   },
   "devDependencies": {
