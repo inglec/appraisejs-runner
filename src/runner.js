@@ -1,72 +1,71 @@
 const commandLineArgs = require('command-line-args');
-const fs = require('fs');
-const util = require('util');
+const { readFile: readFileCallback } = require('fs');
+const { pickBy } = require('lodash');
+const { repeat } = require('promise-utils');
+const { promisify } = require('util');
 const { NodeVM } = require('vm2');
 
+const { validateBenchmarkDefinition } = require('./utils/benchmarks');
 const Timer = require('./utils/Timer');
 const {
-  BEGIN_BENCHMARK,
-  END_BENCHMARK,
   ERROR,
+  GET_BENCHMARK_DEFINITION,
   RESULT,
-} = require('./message_types');
+  RUN_BENCHMARK,
+  STARTED,
+  VALIDATE_BENCHMARK_DEFINITION,
+  WARNING,
+} = require('./constants/messages');
+const { DELIMITER, StageError } = require('./error_types');
 const whitelistedModules = require('./whitelisted_modules');
 
-const readFile = util.promisify(fs.readFile);
+const readFile = promisify(readFileCallback);
 
-const getSandboxedBenchmarks = (vm, filepath) => (
+const getSandboxedBenchmarkDefinitions = (vm, filepath) => (
   // Compile benchmark file in VM2 to get sandboxed `module.exports`
   readFile(filepath).then(contents => vm.run(contents, filepath))
 );
 
-const sendMessage = (type, body) => process.send({ type, body });
+const sendMessage = (stage, status, body) => process.send({ body, stage, status });
 
-const runBenchmark = (benchmarkId, benchmark) => {
-  const {
-    // name,
-    benchmark: benchmarkFunc,
-    // runs = 1,
-    // max_attempts: maxAttempts = 1,
-  } = benchmark;
+const getAsyncResult = (promise, getTime) => (
+  promise
+    .then((value) => {
+      const time = getTime();
+      return { time, value };
+    })
+    .catch((error) => {
+      const time = getTime();
+      return { time, error };
+    })
+);
 
-  if (typeof benchmarkFunc !== 'function') {
-    throw Error(`no benchmark function defined for "${benchmarkId}"`);
-  }
+const getSyncResult = (value, getTime) => {
+  const time = getTime();
 
+  return Promise.resolve({ time, value });
+};
+
+const runBenchmark = (benchmark) => {
   const timer = new Timer();
+  const getTime = () => timer.stop();
 
-  // Run sandboxed benchmark
-  sendMessage(BEGIN_BENCHMARK, { benchmarkId });
+  sendMessage(RUN_BENCHMARK, STARTED);
   timer.start();
 
-  const benchmarked = benchmarkFunc();
+  const benchmarked = benchmark();
 
-  // Check if benchmark is asynchronous
-  if (benchmarked instanceof Promise) {
-    const promise = benchmarked;
-
-    return promise
-      .then((value) => {
-        const time = timer.stop();
-        return { time, value };
-      })
-      .catch((error) => {
-        const time = timer.stop();
-        return { time, error };
-      })
-      .then((result) => {
-        sendMessage(END_BENCHMARK, { benchmarkId });
-        return result;
-      });
-  }
-
-  // Function was synchronous
-  const time = timer.stop();
-  const value = benchmarked;
-  sendMessage(END_BENCHMARK, { benchmarkId });
-
-  return { value, time };
+  // Wait for sync / async benchmark to return
+  return (
+    benchmarked instanceof Promise
+      ? getAsyncResult(benchmarked, getTime)
+      : getSyncResult(benchmarked, getTime)
+  ).then(result => sendMessage(RUN_BENCHMARK, RESULT, result));
 };
+
+const repeatBenchmark = (benchmark, runs) => (
+  repeat(() => runBenchmark(benchmark), runs)
+);
 
 function main() {
   const args = commandLineArgs([
@@ -77,18 +76,14 @@ function main() {
   const { benchmark: benchmarkId, filepath } = args;
 
   if (!filepath) {
-    // eslint-disable-next-line no-console
-    console.error('no filepath specified');
-    process.exit(1);
+    throw Error('no filepath specified');
   }
   if (!benchmarkId) {
-    // eslint-disable-next-line no-console
-    console.error('no benchmark specified');
-    process.exit(1);
+    throw Error('no benchmark specified');
   }
 
   const vm = new NodeVM({
-    // console: 'off',
+    console: 'off',
     require: {
       external: true,
       builtin: whitelistedModules,
@@ -96,10 +91,44 @@ function main() {
     },
   });
 
-  getSandboxedBenchmarks(vm, filepath)
-    .then(sandbox => runBenchmark(benchmarkId, sandbox[benchmarkId]))
-    .then(result => sendMessage(RESULT, { benchmarkId, result }))
-    .catch(error => sendMessage(ERROR, { benchmarkId, error: error.message }));
+  sendMessage(GET_BENCHMARK_DEFINITION, STARTED);
+  getSandboxedBenchmarkDefinitions(vm, filepath)
+    .catch((error) => {
+      throw StageError({ stage: GET_BENCHMARK_DEFINITION, error: error.message });
+    })
+    .then((sandbox) => {
+      sendMessage(VALIDATE_BENCHMARK_DEFINITION, STARTED);
+
+      try {
+        const { definition, warnings } = validateBenchmarkDefinition(sandbox[benchmarkId]);
+        warnings.forEach(warning => sendMessage(VALIDATE_BENCHMARK_DEFINITION, WARNING, warning));
+        sendMessage(
+          VALIDATE_BENCHMARK_DEFINITION,
+          RESULT,
+          pickBy(definition, key => key !== 'benchmark'),
+        );
+
+        return definition;
+      } catch (error) {
+        throw StageError({ type: VALIDATE_BENCHMARK_DEFINITION, error: error.message });
+      }
+    })
+    .then(({ benchmark, runs }) => (
+      // eslint-disable-next-line promise/no-nesting
+      repeatBenchmark(benchmark, runs).catch((error) => {
+        throw StageError({ stage: RUN_BENCHMARK, error: error.message });
+      })
+    ))
+    .catch((error) => {
+      let stage;
+      let errorMessage = error.message;
+
+      if (errorMessage.includes(DELIMITER)) {
+        [stage, errorMessage] = errorMessage.split(DELIMITER);
+      }
+
+      sendMessage(stage, ERROR, errorMessage);
+    });
 }
 
 main();
