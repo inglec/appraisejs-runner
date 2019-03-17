@@ -1,6 +1,10 @@
 const listModuleExports = require('list-module-exports');
-const { assign, isEmpty, reduce } = require('lodash');
-const { default: createLogger } = require('logging');
+const {
+  assign,
+  mapValues,
+  pick,
+  reduce,
+} = require('lodash');
 const { join } = require('path');
 const createPromiseLogger = require('promise-logging');
 const { queue: queuePromises, repeatWhile } = require('promise-utils');
@@ -132,22 +136,16 @@ const runBenchmarksInSequence = (...args) => {
 };
 
 const transformResults = ({ errors, result }) => {
-  const errorsByStage = assign(...errors);
-};
+  const test = mapValues(result, (value) => {
+    const attempts = value.map(attempt => pick(attempt, 'runs'));
+    const benchmarkDefinition = value
+      .find(({ definition }) => !!definition)
+      .definition;
 
-const logResults = ({ errors, result }) => {
-  const logger = createLogger('appraisejs:results');
-  logger.debug('Benchmark results:', result);
-  logger.debug('Benchmark errors:', errors);
-  //
-  // // Log all errors encountered along the chain
-  // errors.forEach(({ errors: stageErrors, stage: stageName }) => {
-  //   if (!isEmpty(stageErrors)) {
-  //     logger.debug(`Errors at "${stageName}":`, stageErrors);
-  //   }
-  // });
+    return { attempts, benchmarkDefinition };
+  });
 
-  return { errors, result };
+  return { errors, test };
 };
 
 const benchmarkProject = (projectPath, nodePath) => {
@@ -161,8 +159,8 @@ const benchmarkProject = (projectPath, nodePath) => {
     .then(results => filterUniqueBenchmarkIds(results, projectPath))
     .then(logger.debugAwait('Running benchmarks'))
     .then(results => runBenchmarksInSequence(results, nodePath))
-    // .then(results => transformResults(results))
-    .then(results => logResults(results))
+    .then(results => transformResults(results))
+    .then(logger.debugId)
     .catch(error => logger.error(error));
 };
 

@@ -1,3 +1,5 @@
+/* eslint-disable promise/always-return */
+
 const { config: loadEnv } = require('dotenv');
 
 const benchmarkProject = require('../src/benchmark');
