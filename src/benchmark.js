@@ -3,7 +3,7 @@ const { assign, isEmpty, reduce } = require('lodash');
 const { default: createLogger } = require('logging');
 const { join } = require('path');
 const createPromiseLogger = require('promise-logging');
-const { queue: queuePromises } = require('promise-utils');
+const { queue: queuePromises, repeatWhile } = require('promise-utils');
 
 const {
   DISCOVER_BENCHMARKS,
@@ -12,7 +12,7 @@ const {
 } = require('./constants/stages');
 const { findFiles, stripRoot } = require('./utils/files');
 const PromisePipe = require('./utils/PromisePipe');
-const ChildProcess = require('./child_process');
+const ChildProcess = require('./ChildProcess');
 const whitelistedModules = require('./whitelisted_modules');
 
 const promisePipe = new PromisePipe();
@@ -95,21 +95,40 @@ const filterUniqueBenchmarkIds = (...args) => {
 
 const runBenchmarksInSequence = (...args) => {
   const [benchmarkIdsByFile, nodePath] = promisePipe.args(...args);
-  const runnerPath = join(nodePath, 'src/runner.js');
+  const runnerPath = join(nodePath, 'src/runner/index.js');
 
   // Create promise-creator for each benchmark to be run
   const queue = reduce(benchmarkIdsByFile, (acc, benchmarkIds, filepath) => {
     benchmarkIds.forEach((benchmarkId) => {
-      acc[benchmarkId] = () => new ChildProcess(runnerPath, filepath, benchmarkId).await();
+      acc[benchmarkId] = async () => {
+        // Run each benchmark a number of times equal to its maximum attempts until no error occurs
+        const attempts = await repeatWhile(
+          () => new ChildProcess(runnerPath, filepath, benchmarkId).await(),
+          (result, i) => {
+            // Always run first attempt
+            if (i === 0) {
+              return true;
+            }
+
+            // If an error occurred in the last run, rerun the benchmark
+            const { definition: { maxAttempts }, runs } = result;
+            const lastRun = runs[runs.length - 1];
+            return lastRun instanceof Error && i < maxAttempts;
+          },
+        );
+
+        return attempts.values();
+      };
     });
 
     return acc;
   }, {});
 
   // Run each benchmark one-at-a-time
-  return queuePromises(queue).then(({ resolved, rejected }) => (
-    promisePipe.return(resolved, rejected, RUN_BENCHMARKS)
-  ));
+  return queuePromises(queue).then((results) => {
+    const { resolved, rejected } = results.partition();
+    return promisePipe.return(resolved, rejected, RUN_BENCHMARKS);
+  });
 };
 
 const transformResults = ({ errors, result }) => {
