@@ -6,6 +6,7 @@ const {
   COMPLETED,
   ERROR,
   GET_BENCHMARK_DEFINITION,
+  GET_BENCHMARK_RESULTS,
   RESULT,
   RUN_BENCHMARK,
   STARTED,
@@ -18,48 +19,57 @@ const GET_BENCHMARK_DEFINITION_TIMEOUT = 5000;
 class ChildProcess {
   constructor(runnerPath, benchmarkPath, benchmarkId) {
     this.benchmarkId = benchmarkId;
-    this.benchmarkDefinition = null;
-    this.state = {
-      stage: null,
-      status: null,
-      runs: {
-        index: -1,
-        results: [],
-      },
-    };
 
     this.childProcess = fork(runnerPath, [
       `--filepath=${benchmarkPath}`,
       `--benchmark=${benchmarkId}`,
     ]);
     this.logger = createLogger('appraisejs:child');
+
+    this.benchmarkDefinition = null;
+    this.state = {
+      stage: null,
+      status: null,
+      benchmark: {
+        runIndex: -1,
+        runs: [],
+      },
+    };
   }
 
-  pushResult(result) {
-    const { index, results } = this.state.runs;
-    if (results[index]) {
-      this.logger.error('tried to push second result', result, 'onto', results[index]);
+  nextRun() {
+    this.state.benchmark.runIndex += 1;
+  }
+
+  pushResult(value) {
+    const { runs, runIndex } = this.state.benchmark;
+    const existing = runs[runIndex];
+
+    if (existing) {
+      const string1 = typeof value === 'object' ? JSON.stringify(value) : value;
+      const string2 = typeof existing === 'object' ? JSON.stringify(existing) : existing;
+      throw Error(`tried to store ${string1} at index ${runIndex}, but found ${string2}`);
     } else {
-      results[index] = result;
+      runs[runIndex] = value;
     }
   }
 
-  beginRun() {
-    this.state.runs.index += 1;
-  }
-
   await() {
-    return new Promise((resolve) => {
-      const resolveRunner = (result) => {
-        if (result) {
-          this.pushResult(result);
+    return new Promise((resolve, reject) => {
+      const resolveProcess = (value) => {
+        if (value) {
+          this.pushResult(value);
         }
-        resolve(this.state.runs.results);
+
+        resolve({
+          definition: this.benchmarkDefinition,
+          runs: this.state.benchmark.runs,
+        });
       };
 
       const onError = (error) => {
         this.state.status = COMPLETED;
-        resolveRunner(error);
+        reject(error);
       };
 
       const onExit = (code, signal) => {
@@ -70,10 +80,8 @@ class ChildProcess {
           if (signal) {
             message += `, signal: ${signal}`;
           }
-          this.pushResult(Error(message));
+          reject(Error(message));
         }
-
-        resolveRunner();
       };
 
       const onMessage = ({ body, stage, status }) => {
@@ -92,18 +100,20 @@ class ChildProcess {
               case GET_BENCHMARK_DEFINITION:
                 setTimeout(() => {
                   if (this.state.stage === stage && this.state.status === STARTED) {
-                    resolveRunner(Error(`timeout after ${GET_BENCHMARK_DEFINITION_TIMEOUT}ms`));
+                    resolveProcess(
+                      Error(`timeout after ${GET_BENCHMARK_DEFINITION_TIMEOUT}ms`),
+                    );
                     this.childProcess.kill();
                   }
                 }, GET_BENCHMARK_DEFINITION_TIMEOUT);
                 break;
               case RUN_BENCHMARK: {
-                this.beginRun();
+                this.nextRun();
 
                 const { timeout } = this.benchmarkDefinition;
                 setTimeout(() => {
                   if (this.state.stage === stage && this.state.status === STARTED) {
-                    resolveRunner(Error(`timeout after ${timeout}ms`));
+                    resolveProcess(Error(`timeout after ${timeout}ms`));
                     this.childProcess.kill();
                   }
                 }, timeout);
@@ -111,36 +121,45 @@ class ChildProcess {
               }
               default:
             }
+
             break;
           }
           case COMPLETED: {
             this.state.status = COMPLETED;
+
+            switch (stage) {
+              case GET_BENCHMARK_RESULTS:
+                resolveProcess();
+                break;
+              default:
+            }
+
             break;
           }
           case RESULT:
             this.state.status = COMPLETED;
 
             switch (stage) {
+              case RUN_BENCHMARK:
+                this.pushResult(value);
+                break;
               case VALIDATE_BENCHMARK_DEFINITION: {
                 this.benchmarkDefinition = value;
                 break;
               }
-              case RUN_BENCHMARK: {
-                this.pushResult(value);
-                break;
-              }
               default:
             }
+
             break;
           case ERROR: {
             this.state.status = COMPLETED;
-            resolveRunner(value);
+            resolveProcess(value);
             break;
           }
           case WARNING:
             break;
           default:
-            throw Error(`unexpected message status ${status}`);
+            reject(Error(`unexpected message status ${status}`));
         }
       };
 

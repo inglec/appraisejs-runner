@@ -12,7 +12,7 @@ const {
 } = require('./constants/stages');
 const { findFiles, stripRoot } = require('./utils/files');
 const PromisePipe = require('./utils/PromisePipe');
-const ChildProcess = require('./child_process');
+const ChildProcess = require('./ChildProcess');
 const whitelistedModules = require('./whitelisted_modules');
 
 const promisePipe = new PromisePipe();
@@ -95,7 +95,7 @@ const filterUniqueBenchmarkIds = (...args) => {
 
 const runBenchmarksInSequence = (...args) => {
   const [benchmarkIdsByFile, nodePath] = promisePipe.args(...args);
-  const runnerPath = join(nodePath, 'src/runner.js');
+  const runnerPath = join(nodePath, 'src/runner/index.js');
 
   // Create promise-creator for each benchmark to be run
   const queue = reduce(benchmarkIdsByFile, (acc, benchmarkIds, filepath) => {
@@ -107,9 +107,10 @@ const runBenchmarksInSequence = (...args) => {
   }, {});
 
   // Run each benchmark one-at-a-time
-  return queuePromises(queue).then(({ resolved, rejected }) => (
-    promisePipe.return(resolved, rejected, RUN_BENCHMARKS)
-  ));
+  return queuePromises(queue).then((results) => {
+    const { resolved, rejected } = results.partition();
+    return promisePipe.return(resolved, rejected, RUN_BENCHMARKS);
+  });
 };
 
 const transformResults = ({ errors, result }) => {
