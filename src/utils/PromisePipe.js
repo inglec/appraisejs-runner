@@ -20,10 +20,18 @@ class PromisePipe {
     return args;
   }
 
-  return(result, errors, key) {
+  return(result, errors, stage, fields = {}) {
+    const newError = {
+      ...fields,
+      errors,
+    };
+    if (stage) {
+      newError.stage = stage;
+    }
+
     return {
       result,
-      errors: this.errors.concat(key ? { [key]: errors } : errors),
+      errors: this.errors.concat(newError),
     };
   }
 }

@@ -1,20 +1,18 @@
 const listModuleExports = require('list-module-exports');
-const {
-  assign,
-  forEach,
-  isEmpty,
-  mapValues,
-  reduce,
-} = require('lodash');
+const { assign, isEmpty, reduce } = require('lodash');
 const { default: createLogger } = require('logging');
 const { join } = require('path');
 const createPromiseLogger = require('promise-logging');
 const { queue: queuePromises } = require('promise-utils');
-const requestPromise = require('request-promise-native');
 
+const {
+  DISCOVER_BENCHMARKS,
+  RUN_BENCHMARKS,
+  VERIFY_UNIQUE_BENCHMARK_IDS,
+} = require('./constants/stages');
 const { findFiles, stripRoot } = require('./utils/files');
 const PromisePipe = require('./utils/PromisePipe');
-const { runChildProcess } = require('./child_process');
+const ChildProcess = require('./child_process');
 const whitelistedModules = require('./whitelisted_modules');
 
 const promisePipe = new PromisePipe();
@@ -22,7 +20,7 @@ const promisePipe = new PromisePipe();
 const discoverBenchmarkFiles = projectPath => findFiles(/\.benchmark.js$/, projectPath);
 
 const getBenchmarkIdsByFile = (...args) => {
-  const [filepaths, nodePath] = promisePipe.args(...args);
+  const [filepaths, projectPath] = promisePipe.args(...args);
   const errors = [];
 
   // Safely list `module.exports` of a passed file
@@ -30,10 +28,8 @@ const getBenchmarkIdsByFile = (...args) => {
     listModuleExports(filepath, whitelistedModules, true)
       .then(benchmarkIds => ({ [filepath]: benchmarkIds }))
       .catch((error) => {
-        // TODO
-        // const projectPath = stripRoot(filepath, nodePath);
-        const projectPath = filepath;
-        errors.push(Error(`error in "${projectPath}": ${error.message}`));
+        const relativePath = stripRoot(filepath, projectPath);
+        errors.push(Error(`error in "${relativePath}": ${error.message}`));
 
         return undefined;
       }));
@@ -44,13 +40,13 @@ const getBenchmarkIdsByFile = (...args) => {
       // Merge each `values` object into a single object
       const result = assign({}, ...values);
 
-      return promisePipe.return(result, errors, 'getBenchmarkIds');
+      return promisePipe.return(result, errors, DISCOVER_BENCHMARKS);
     });
 };
 
 // Check that each benchmark ID is unique across all benchmark files
 const filterUniqueBenchmarkIds = (...args) => {
-  const [benchmarkIdsByFile, nodePath] = promisePipe.args(...args);
+  const [benchmarkIdsByFile, projectPath] = promisePipe.args(...args);
 
   // Reverse mapping of { filepath: [benchmarkId] } to { benchmarkId: [filepath] }
   const filesByBenchmarkId = reduce(benchmarkIdsByFile, (acc, benchmarkIds, filepath) => {
@@ -83,8 +79,7 @@ const filterUniqueBenchmarkIds = (...args) => {
         }
       } else {
         // TODO
-        // const files = filepaths.map(filepath => `"${stripRoot(filepath, nodePath)}"`).join(', ');
-        const files = filepaths.map(filepath => `"${filepath}"`).join(', ');
+        const files = filepaths.map(filepath => `"${stripRoot(filepath, projectPath)}"`).join(', ');
         acc.errors.push(
           Error(`duplicate benchmark ID "${benchmarkId}" found in ${count} files: ${files}`),
         );
@@ -95,7 +90,7 @@ const filterUniqueBenchmarkIds = (...args) => {
     { errors: [], unique: {} },
   );
 
-  return promisePipe.return(unique, errors, 'filterUniqueBenchmarkIds');
+  return promisePipe.return(unique, errors, VERIFY_UNIQUE_BENCHMARK_IDS);
 };
 
 const runBenchmarksInSequence = (...args) => {
@@ -105,7 +100,7 @@ const runBenchmarksInSequence = (...args) => {
   // Create promise-creator for each benchmark to be run
   const queue = reduce(benchmarkIdsByFile, (acc, benchmarkIds, filepath) => {
     benchmarkIds.forEach((benchmarkId) => {
-      acc[benchmarkId] = () => runChildProcess(runnerPath, filepath, benchmarkId);
+      acc[benchmarkId] = () => new ChildProcess(runnerPath, filepath, benchmarkId).await();
     });
 
     return acc;
@@ -113,68 +108,42 @@ const runBenchmarksInSequence = (...args) => {
 
   // Run each benchmark one-at-a-time
   return queuePromises(queue).then(({ resolved, rejected }) => (
-    promisePipe.return(resolved, rejected, 'runBenchmarksInSequence')
+    promisePipe.return(resolved, rejected, RUN_BENCHMARKS)
   ));
+};
+
+const transformResults = ({ errors, result }) => {
+  const errorsByStage = assign(...errors);
 };
 
 const logResults = ({ errors, result }) => {
   const logger = createLogger('appraisejs:results');
   logger.debug('Benchmark results:', result);
-
-  // Log all errors encountered along the chain
-  forEach(errors, (stage) => {
-    const stageName = Object.keys(stage)[0];
-    const stageErrors = Object.values(stage)[0];
-
-    if (!isEmpty(stageErrors)) {
-      logger.debug(`Errors at "${stageName}":`, stageErrors);
-    }
-  });
+  logger.debug('Benchmark errors:', errors);
+  //
+  // // Log all errors encountered along the chain
+  // errors.forEach(({ errors: stageErrors, stage: stageName }) => {
+  //   if (!isEmpty(stageErrors)) {
+  //     logger.debug(`Errors at "${stageName}":`, stageErrors);
+  //   }
+  // });
 
   return { errors, result };
 };
 
-// Send benchmark results to worker parent host
-const sendResults = ({ errors, result }, hostPort) => {
-  const stringifiedErrors = errors.map((stage) => {
-    const stageName = Object.keys(stage)[0];
-    const stageErrors = Object.values(stage)[0];
-    const stringifiedStageErrors = (
-      Array.isArray(stageErrors)
-        ? stageErrors.map(error => error.message)
-        : mapValues(stageErrors, error => error.message)
-    );
-
-    return { [stageName]: stringifiedStageErrors };
-  });
-
-  return requestPromise({
-    method: 'POST',
-    uri: `http://localhost:${hostPort}/results`,
-    body: {
-      errors: stringifiedErrors,
-      results: result,
-    },
-    json: true,
-    resolveWithFullResponse: true,
-  });
-};
-
-const benchmarkProject = (projectPath, hostPort, nodePath) => {
+const benchmarkProject = (projectPath, nodePath) => {
   const logger = createPromiseLogger('appraisejs');
   logger.debug('Finding benchmark files');
 
   return discoverBenchmarkFiles(projectPath)
     .then(logger.debugAwait('Getting benchmarks from files'))
-    .then(results => getBenchmarkIdsByFile(results, nodePath))
+    .then(results => getBenchmarkIdsByFile(results, projectPath))
     .then(logger.debugAwait('Filtering benchmarks by unique ID'))
-    .then(results => filterUniqueBenchmarkIds(results, nodePath))
+    .then(results => filterUniqueBenchmarkIds(results, projectPath))
     .then(logger.debugAwait('Running benchmarks'))
     .then(results => runBenchmarksInSequence(results, nodePath))
+    // .then(results => transformResults(results))
     .then(results => logResults(results))
-    .then(logger.debugAwait('Sending results to worker'))
-    .then(results => sendResults(results, hostPort))
-    .then(({ statusCode }) => logger.info('Worker responded with status', statusCode))
     .catch(error => logger.error(error));
 };
 
