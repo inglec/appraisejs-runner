@@ -1,42 +1,19 @@
 const commandLineArgs = require('command-line-args');
+const { default: createLogger } = require('logging');
 const requestPromise = require('request-promise-native');
 
 const benchmarkProject = require('./benchmark');
 
 // Send benchmark results to worker parent host
-// const sendResults = ({ errors, result: results }, hostPort) => {
-//   const errorsObject = assign(...errors);
-//   const { testErrors, attemptErrors } = chain(errorsObject)
-//     .mapValues(stageErrors => (
-//       // Convert from Error object to string
-//       Array.isArray(stageErrors)
-//         ? stageErrors.map(error => error.message)
-//         : mapValues(stageErrors, error => error.message)
-//     ))
-//     .reduce(
-//       (acc, stageErrors, stageName) => {
-//         // Split stages
-//         const type = stageName === RUN_BENCHMARKS ? 'attemptErrors' : 'testErrors';
-//         acc[type][stageName] = stageErrors;
-//         return acc;
-//       },
-//       { testErrors: {}, attemptErrors: {} },
-//     )
-//     .value();
-//
-//   const benchmarks = {
-//     ...results,
-//     ...attemptErrors,
-//   }
-//
-//   return requestPromise({
-//     method: 'POST',
-//     uri: `http://localhost:${hostPort}/results`,
-//     body,
-//     json: true,
-//     resolveWithFullResponse: true,
-//   });
-// };
+const sendResults = (results, hostPort) => (
+  requestPromise({
+    method: 'POST',
+    uri: `http://localhost:${hostPort}/results`,
+    body: results,
+    json: true,
+    resolveWithFullResponse: true,
+  })
+);
 
 function main() {
   const args = commandLineArgs([
@@ -57,9 +34,11 @@ function main() {
     throw Error('environment variable NODE_PATH not set');
   }
 
+  const logger = createLogger('appraisejs');
+
   benchmarkProject(args.path, NODE_PATH)
-    // .then(results => sendResults(results, args.hostPort))
-    // .then(({ statusCode }) => logger.info('Worker responded with status', statusCode))
+    .then(results => sendResults(results, args.hostPort))
+    .then(({ statusCode }) => logger.info('Worker responded with status', statusCode))
     .catch((error) => {
       throw error;
     });
