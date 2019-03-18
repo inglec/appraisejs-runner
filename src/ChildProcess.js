@@ -41,24 +41,24 @@ class ChildProcess {
     this.state.benchmark.runIndex += 1;
   }
 
-  pushResult(value) {
+  pushResult(body) {
     const { runs, runIndex } = this.state.benchmark;
     const existing = runs[runIndex];
 
     if (existing) {
-      const string1 = typeof value === 'object' ? JSON.stringify(value) : value;
+      const string1 = typeof body === 'object' ? JSON.stringify(body) : body;
       const string2 = typeof existing === 'object' ? JSON.stringify(existing) : existing;
       throw Error(`tried to store ${string1} at index ${runIndex}, but found ${string2}`);
     } else {
-      runs[runIndex] = value;
+      runs[runIndex] = body;
     }
   }
 
   await() {
     return new Promise((resolve, reject) => {
-      const resolveProcess = (value) => {
-        if (value) {
-          this.pushResult(value);
+      const resolveProcess = (body) => {
+        if (body) {
+          this.pushResult(body);
         }
 
         resolve({
@@ -86,8 +86,11 @@ class ChildProcess {
 
       const onMessage = ({ body, stage, status }) => {
         // Convert error messages back to errors
-        const value = status === ERROR ? Error(body) : body;
-        this.logger.debug(`[${this.benchmarkId}]`, `${stage}:`, status, ...compact([value]));
+        this.logger.debug(
+          `[${this.benchmarkId}]`,
+          `${stage}:`, status,
+          ...compact([status === ERROR ? Error(body) : body]),
+        );
 
         this.state.stage = stage;
 
@@ -100,9 +103,9 @@ class ChildProcess {
               case GET_BENCHMARK_DEFINITION:
                 setTimeout(() => {
                   if (this.state.stage === stage && this.state.status === STARTED) {
-                    resolveProcess(
-                      Error(`timeout after ${GET_BENCHMARK_DEFINITION_TIMEOUT}ms`),
-                    );
+                    resolveProcess({
+                      error: `timeout after ${GET_BENCHMARK_DEFINITION_TIMEOUT}ms`,
+                    });
                     this.childProcess.kill();
                   }
                 }, GET_BENCHMARK_DEFINITION_TIMEOUT);
@@ -113,7 +116,7 @@ class ChildProcess {
                 const { timeout } = this.benchmarkDefinition;
                 setTimeout(() => {
                   if (this.state.stage === stage && this.state.status === STARTED) {
-                    resolveProcess(Error(`timeout after ${timeout}ms`));
+                    resolveProcess({ error: `timeout after ${timeout}ms` });
                     this.childProcess.kill();
                   }
                 }, timeout);
@@ -141,10 +144,10 @@ class ChildProcess {
 
             switch (stage) {
               case RUN_BENCHMARK:
-                this.pushResult(value);
+                this.pushResult(body);
                 break;
               case VALIDATE_BENCHMARK_DEFINITION: {
-                this.benchmarkDefinition = value;
+                this.benchmarkDefinition = body;
                 break;
               }
               default:
@@ -153,7 +156,7 @@ class ChildProcess {
             break;
           case ERROR: {
             this.state.status = COMPLETED;
-            resolveProcess(value);
+            resolveProcess({ error: body });
             break;
           }
           case WARNING:

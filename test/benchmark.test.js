@@ -2,9 +2,10 @@
 
 const { config: loadEnv } = require('dotenv');
 
+loadEnv();
+
 const benchmarkProject = require('../src/benchmark');
 
-loadEnv();
 const { NODE_PATH, TEST_PROJECT_PATH } = process.env;
 
 // Time out after 2 minutes

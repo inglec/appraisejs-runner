@@ -1,6 +1,6 @@
 const listModuleExports = require('list-module-exports');
 const { reduce } = require('lodash/collection');
-const { assign, mapValues, pick } = require('lodash/object');
+const { assign, mapValues } = require('lodash/object');
 const { join } = require('path');
 const createPromiseLogger = require('promise-logging');
 const { queue: queuePromises, repeatWhile } = require('promise-utils');
@@ -132,8 +132,21 @@ const runBenchmarksInSequence = (...args) => {
 };
 
 const transformResults = ({ errors, result }) => {
+  const stringifiedStages = errors.map(({ errors: stageErrors, stage }) => {
+    const stringifiedErrors = (
+      Array.isArray(stageErrors)
+        ? stageErrors.map(error => error.message)
+        : mapValues(stageErrors, error => error.message)
+    );
+
+    return {
+      errors: stringifiedErrors,
+      stage,
+    };
+  });
+
   const test = mapValues(result, (value) => {
-    const attempts = value.map(attempt => pick(attempt, 'runs'));
+    const attempts = value.map(attempt => ({ runs: attempt.runs }));
     const benchmarkDefinition = value
       .find(({ definition }) => !!definition)
       .definition;
@@ -141,7 +154,10 @@ const transformResults = ({ errors, result }) => {
     return { attempts, benchmarkDefinition };
   });
 
-  return { errors, test };
+  return {
+    errors: stringifiedStages,
+    test,
+  };
 };
 
 const benchmarkProject = (projectPath, nodePath) => {

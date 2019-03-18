@@ -20,11 +20,12 @@ class PromisePipe {
     return args;
   }
 
-  return(result, errors, stage, fields = {}) {
+  return(result, errors = [], stage, fields = {}) {
     const newError = {
       ...fields,
       errors,
     };
+
     if (stage) {
       newError.stage = stage;
     }
