@@ -1,10 +1,6 @@
 const listModuleExports = require('list-module-exports');
-const {
-  assign,
-  mapValues,
-  pick,
-  reduce,
-} = require('lodash');
+const { reduce } = require('lodash/collection');
+const { assign, mapValues, pick } = require('lodash/object');
 const { join } = require('path');
 const createPromiseLogger = require('promise-logging');
 const { queue: queuePromises, repeatWhile } = require('promise-utils');

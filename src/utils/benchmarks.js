@@ -1,4 +1,4 @@
-const { reduce } = require('lodash');
+const { reduce } = require('lodash/collection');
 
 const schema = require('../../benchmark_definition_schema');
 

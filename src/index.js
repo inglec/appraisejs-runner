@@ -4,6 +4,11 @@ const requestPromise = require('request-promise-native');
 
 const benchmarkProject = require('./benchmark');
 
+const { NODE_PATH } = process.env;
+if (!NODE_PATH) {
+  throw Error('environment variable NODE_PATH not set');
+}
+
 // Send benchmark results to worker parent host
 const sendResults = (results, hostPort) => (
   requestPromise({
@@ -24,14 +29,8 @@ function main() {
   if (!args.path) {
     throw Error('no path specified');
   }
-
   if (!args.hostPort) {
     throw Error('no host port specified');
-  }
-
-  const { NODE_PATH } = process.env;
-  if (!NODE_PATH) {
-    throw Error('environment variable NODE_PATH not set');
   }
 
   const logger = createLogger('appraisejs');

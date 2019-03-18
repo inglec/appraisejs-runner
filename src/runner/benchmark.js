@@ -1,5 +1,5 @@
 const { readFile: readFileCallback } = require('fs');
-const { pickBy } = require('lodash');
+const { pickBy } = require('lodash/object');
 const { repeatWhile } = require('promise-utils');
 const { promisify } = require('util');
 const { NodeVM } = require('vm2');

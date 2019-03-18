@@ -1,5 +1,5 @@
 const { fork } = require('child_process');
-const { compact } = require('lodash');
+const { compact } = require('lodash/array');
 const { default: createLogger } = require('logging');
 
 const {
