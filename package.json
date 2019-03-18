@@ -5,6 +5,7 @@
   "main": "src/index.js",
   "scripts": {
     "lint": "eslint src",
+    "start": "NODE_PATH=. node src/index.js",
     "test": "NODE_PATH=. jest"
   },
   "author": "Ciarán Ingle",
