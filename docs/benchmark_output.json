@@ -1,0 +1,363 @@
+{
+  "result": {
+    "attacks-exit-process": [
+      {
+        "definition": {
+          "timeout": 5000,
+          "runs": 1,
+          "maxAttempts": 1
+        },
+        "filepath": "/home/ciaran/Documents/college/year-4/fyp/test-project/src/failure/attacks.benchmark.js",
+        "runs": [
+          {
+            "error": "process.exit is not a function"
+          }
+        ]
+      }
+    ],
+    "attacks-infinite-loop": [
+      {
+        "definition": {
+          "timeout": 5000,
+          "runs": 1,
+          "maxAttempts": 1
+        },
+        "filepath": "/home/ciaran/Documents/college/year-4/fyp/test-project/src/failure/attacks.benchmark.js",
+        "runs": [
+          {
+            "error": "timeout after 5000ms"
+          }
+        ]
+      }
+    ],
+    "attacks-require-blacklisted-modules": [
+      {
+        "definition": {
+          "timeout": 5000,
+          "runs": 1,
+          "maxAttempts": 1
+        },
+        "filepath": "/home/ciaran/Documents/college/year-4/fyp/test-project/src/failure/attacks.benchmark.js",
+        "runs": [
+          {
+            "error": "Access denied to require 'child_process'"
+          }
+        ]
+      }
+    ],
+    "runtime-errors-not-a-function": [
+      {
+        "definition": {
+          "timeout": 5000,
+          "runs": 1,
+          "maxAttempts": 3
+        },
+        "filepath": "/home/ciaran/Documents/college/year-4/fyp/test-project/src/failure/runtime_errors.benchmark.js",
+        "runs": [
+          {
+            "error": "func is not a function"
+          }
+        ]
+      },
+      {
+        "definition": {
+          "timeout": 5000,
+          "runs": 1,
+          "maxAttempts": 3
+        },
+        "filepath": "/home/ciaran/Documents/college/year-4/fyp/test-project/src/failure/runtime_errors.benchmark.js",
+        "runs": [
+          {
+            "error": "func is not a function"
+          }
+        ]
+      },
+      {
+        "definition": {
+          "timeout": 5000,
+          "runs": 1,
+          "maxAttempts": 3
+        },
+        "filepath": "/home/ciaran/Documents/college/year-4/fyp/test-project/src/failure/runtime_errors.benchmark.js",
+        "runs": [
+          {
+            "error": "func is not a function"
+          }
+        ]
+      }
+    ],
+    "runtime-errors-random-error": [
+      {
+        "definition": {
+          "timeout": 5000,
+          "runs": 3,
+          "maxAttempts": 10
+        },
+        "filepath": "/home/ciaran/Documents/college/year-4/fyp/test-project/src/failure/runtime_errors.benchmark.js",
+        "runs": [
+          {
+            "error": "random error"
+          }
+        ]
+      },
+      {
+        "definition": {
+          "timeout": 5000,
+          "runs": 3,
+          "maxAttempts": 10
+        },
+        "filepath": "/home/ciaran/Documents/college/year-4/fyp/test-project/src/failure/runtime_errors.benchmark.js",
+        "runs": [
+          {
+            "error": "random error"
+          }
+        ]
+      },
+      {
+        "definition": {
+          "timeout": 5000,
+          "runs": 3,
+          "maxAttempts": 10
+        },
+        "filepath": "/home/ciaran/Documents/college/year-4/fyp/test-project/src/failure/runtime_errors.benchmark.js",
+        "runs": [
+          {
+            "error": "random error"
+          }
+        ]
+      },
+      {
+        "definition": {
+          "timeout": 5000,
+          "runs": 3,
+          "maxAttempts": 10
+        },
+        "filepath": "/home/ciaran/Documents/college/year-4/fyp/test-project/src/failure/runtime_errors.benchmark.js",
+        "runs": [
+          {
+            "error": "random error"
+          }
+        ]
+      },
+      {
+        "definition": {
+          "timeout": 5000,
+          "runs": 3,
+          "maxAttempts": 10
+        },
+        "filepath": "/home/ciaran/Documents/college/year-4/fyp/test-project/src/failure/runtime_errors.benchmark.js",
+        "runs": [
+          {
+            "error": "random error"
+          }
+        ]
+      },
+      {
+        "definition": {
+          "timeout": 5000,
+          "runs": 3,
+          "maxAttempts": 10
+        },
+        "filepath": "/home/ciaran/Documents/college/year-4/fyp/test-project/src/failure/runtime_errors.benchmark.js",
+        "runs": [
+          {
+            "error": "random error"
+          }
+        ]
+      },
+      {
+        "definition": {
+          "timeout": 5000,
+          "runs": 3,
+          "maxAttempts": 10
+        },
+        "filepath": "/home/ciaran/Documents/college/year-4/fyp/test-project/src/failure/runtime_errors.benchmark.js",
+        "runs": [
+          {
+            "error": "random error"
+          }
+        ]
+      },
+      {
+        "definition": {
+          "timeout": 5000,
+          "runs": 3,
+          "maxAttempts": 10
+        },
+        "filepath": "/home/ciaran/Documents/college/year-4/fyp/test-project/src/failure/runtime_errors.benchmark.js",
+        "runs": [
+          {
+            "time": 273720
+          },
+          {
+            "error": "random error"
+          }
+        ]
+      },
+      {
+        "definition": {
+          "timeout": 5000,
+          "runs": 3,
+          "maxAttempts": 10
+        },
+        "filepath": "/home/ciaran/Documents/college/year-4/fyp/test-project/src/failure/runtime_errors.benchmark.js",
+        "runs": [
+          {
+            "time": 658294
+          },
+          {
+            "time": 138218
+          },
+          {
+            "error": "random error"
+          }
+        ]
+      },
+      {
+        "definition": {
+          "timeout": 5000,
+          "runs": 3,
+          "maxAttempts": 10
+        },
+        "filepath": "/home/ciaran/Documents/college/year-4/fyp/test-project/src/failure/runtime_errors.benchmark.js",
+        "runs": [
+          {
+            "time": 224109
+          },
+          {
+            "time": 21803
+          },
+          {
+            "time": 5337
+          }
+        ]
+      }
+    ],
+    "async-async": [
+      {
+        "definition": {
+          "timeout": 5000,
+          "runs": 1,
+          "maxAttempts": 1
+        },
+        "filepath": "/home/ciaran/Documents/college/year-4/fyp/test-project/src/success/async.benchmark.js",
+        "runs": [
+          {
+            "time": 1005171749,
+            "value": "async await"
+          }
+        ]
+      }
+    ],
+    "async-promise": [
+      {
+        "definition": {
+          "timeout": 5000,
+          "runs": 1,
+          "maxAttempts": 1
+        },
+        "filepath": "/home/ciaran/Documents/college/year-4/fyp/test-project/src/success/async.benchmark.js",
+        "runs": [
+          {
+            "time": 1006884038,
+            "value": "promise"
+          }
+        ]
+      }
+    ],
+    "require-external-partition-object": [
+      {
+        "definition": {
+          "timeout": 5000,
+          "runs": 1,
+          "maxAttempts": 1
+        },
+        "filepath": "/home/ciaran/Documents/college/year-4/fyp/test-project/src/success/require_external.benchmark.js",
+        "runs": [
+          {
+            "time": 606213,
+            "value": {
+              "even": {
+                "b": 2
+              },
+              "odd": {
+                "a": 1,
+                "c": 3
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "sync-add-numbers": [
+      {
+        "definition": {
+          "timeout": 5000,
+          "runs": 10,
+          "maxAttempts": 1
+        },
+        "filepath": "/home/ciaran/Documents/college/year-4/fyp/test-project/src/success/sync.benchmark.js",
+        "runs": [
+          {
+            "time": 293566,
+            "value": 6
+          },
+          {
+            "time": 30347,
+            "value": 6
+          },
+          {
+            "time": 5695,
+            "value": 6
+          },
+          {
+            "time": 5856,
+            "value": 6
+          },
+          {
+            "time": 5724,
+            "value": 6
+          },
+          {
+            "time": 3998,
+            "value": 6
+          },
+          {
+            "time": 3387,
+            "value": 6
+          },
+          {
+            "time": 3279,
+            "value": 6
+          },
+          {
+            "time": 3014,
+            "value": 6
+          },
+          {
+            "time": 3221,
+            "value": 6
+          }
+        ]
+      }
+    ]
+  },
+  "errors": [
+    {
+      "errors": [
+        {}
+      ],
+      "stage": "discover benchmarks"
+    },
+    {
+      "errors": [
+        {}
+      ],
+      "stage": "verify unique benchmark IDs"
+    },
+    {
+      "errors": {},
+      "stage": "run benchmarks"
+    }
+  ]
+}

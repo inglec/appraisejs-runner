@@ -1,0 +1,311 @@
+{
+  "errors": [
+    {
+      "errors": [
+        "error in \"src/failure/syntax_error.benchmark.js\": Unexpected identifier"
+      ],
+      "stage": "discover benchmarks"
+    },
+    {
+      "errors": [
+        "duplicate benchmark ID \"duplicateKey\" found in 2 files: \"src/failure/duplicate1.benchmark.js\", \"src/failure/duplicate2.benchmark.js\""
+      ],
+      "stage": "verify unique benchmark IDs"
+    }
+  ],
+  "benchmarks": {
+    "attacks-exit-process": {
+      "attempts": [
+        {
+          "runs": [
+            {
+              "error": "process.exit is not a function"
+            }
+          ]
+        }
+      ],
+      "definition": {
+        "timeout": 5000,
+        "runs": 1,
+        "maxAttempts": 1
+      },
+      "filepath": "src/failure/attacks.benchmark.js"
+    },
+    "attacks-infinite-loop": {
+      "attempts": [
+        {
+          "runs": [
+            {
+              "error": "timeout after 5000ms"
+            }
+          ]
+        }
+      ],
+      "definition": {
+        "timeout": 5000,
+        "runs": 1,
+        "maxAttempts": 1
+      },
+      "filepath": "src/failure/attacks.benchmark.js"
+    },
+    "attacks-require-blacklisted-modules": {
+      "attempts": [
+        {
+          "runs": [
+            {
+              "error": "Access denied to require 'child_process'"
+            }
+          ]
+        }
+      ],
+      "definition": {
+        "timeout": 5000,
+        "runs": 1,
+        "maxAttempts": 1
+      },
+      "filepath": "src/failure/attacks.benchmark.js"
+    },
+    "runtime-errors-not-a-function": {
+      "attempts": [
+        {
+          "runs": [
+            {
+              "error": "func is not a function"
+            }
+          ]
+        },
+        {
+          "runs": [
+            {
+              "error": "func is not a function"
+            }
+          ]
+        },
+        {
+          "runs": [
+            {
+              "error": "func is not a function"
+            }
+          ]
+        }
+      ],
+      "definition": {
+        "timeout": 5000,
+        "runs": 1,
+        "maxAttempts": 3
+      },
+      "filepath": "src/failure/runtime_errors.benchmark.js"
+    },
+    "runtime-errors-random-error": {
+      "attempts": [
+        {
+          "runs": [
+            {
+              "time": 256360
+            },
+            {
+              "error": "random error"
+            }
+          ]
+        },
+        {
+          "runs": [
+            {
+              "time": 301271
+            },
+            {
+              "time": 31094
+            },
+            {
+              "error": "random error"
+            }
+          ]
+        },
+        {
+          "runs": [
+            {
+              "error": "random error"
+            }
+          ]
+        },
+        {
+          "runs": [
+            {
+              "error": "random error"
+            }
+          ]
+        },
+        {
+          "runs": [
+            {
+              "time": 307605
+            },
+            {
+              "error": "random error"
+            }
+          ]
+        },
+        {
+          "runs": [
+            {
+              "time": 238357
+            },
+            {
+              "error": "random error"
+            }
+          ]
+        },
+        {
+          "runs": [
+            {
+              "error": "random error"
+            }
+          ]
+        },
+        {
+          "runs": [
+            {
+              "error": "random error"
+            }
+          ]
+        },
+        {
+          "runs": [
+            {
+              "error": "random error"
+            }
+          ]
+        },
+        {
+          "runs": [
+            {
+              "error": "random error"
+            }
+          ]
+        }
+      ],
+      "definition": {
+        "timeout": 5000,
+        "runs": 3,
+        "maxAttempts": 10
+      },
+      "filepath": "src/failure/runtime_errors.benchmark.js"
+    },
+    "async-async": {
+      "attempts": [
+        {
+          "runs": [
+            {
+              "time": 1004589073,
+              "value": "async await"
+            }
+          ]
+        }
+      ],
+      "definition": {
+        "timeout": 5000,
+        "runs": 1,
+        "maxAttempts": 1
+      },
+      "filepath": "src/success/async.benchmark.js"
+    },
+    "async-promise": {
+      "attempts": [
+        {
+          "runs": [
+            {
+              "time": 1005015119,
+              "value": "promise"
+            }
+          ]
+        }
+      ],
+      "definition": {
+        "timeout": 5000,
+        "runs": 1,
+        "maxAttempts": 1
+      },
+      "filepath": "src/success/async.benchmark.js"
+    },
+    "require-external-partition-object": {
+      "attempts": [
+        {
+          "runs": [
+            {
+              "time": 563307,
+              "value": {
+                "even": {
+                  "b": 2
+                },
+                "odd": {
+                  "a": 1,
+                  "c": 3
+                }
+              }
+            }
+          ]
+        }
+      ],
+      "definition": {
+        "timeout": 5000,
+        "runs": 1,
+        "maxAttempts": 1
+      },
+      "filepath": "src/success/require_external.benchmark.js"
+    },
+    "sync-add-numbers": {
+      "attempts": [
+        {
+          "runs": [
+            {
+              "time": 216294,
+              "value": 6
+            },
+            {
+              "time": 20037,
+              "value": 6
+            },
+            {
+              "time": 4718,
+              "value": 6
+            },
+            {
+              "time": 3041,
+              "value": 6
+            },
+            {
+              "time": 3827,
+              "value": 6
+            },
+            {
+              "time": 2453,
+              "value": 6
+            },
+            {
+              "time": 2404,
+              "value": 6
+            },
+            {
+              "time": 3268,
+              "value": 6
+            },
+            {
+              "time": 3603,
+              "value": 6
+            },
+            {
+              "time": 2667,
+              "value": 6
+            }
+          ]
+        }
+      ],
+      "definition": {
+        "timeout": 5000,
+        "runs": 10,
+        "maxAttempts": 1
+      },
+      "filepath": "src/success/sync.benchmark.js"
+    }
+  }
+}
