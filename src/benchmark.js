@@ -132,7 +132,8 @@ const runBenchmarksInSequence = (...args) => {
   });
 };
 
-const transformResults = ({ errors, result }) => {
+const transformResults = ({ errors, result }, projectPath) => {
+  // Convert Error objects to strings
   const stringifiedStages = errors
     .filter(stage => !isEmpty(stage.errors))
     .map(({ errors: stageErrors, stage }) => {
@@ -148,18 +149,25 @@ const transformResults = ({ errors, result }) => {
       };
     });
 
-  const test = mapValues(result, (value) => {
-    const attempts = value.map(attempt => ({ runs: attempt.runs }));
-    const benchmarkDefinition = value
-      .find(({ definition }) => !!definition)
-      .definition;
+  // Reformat test results
+  const transformedTest = mapValues(result, (value) => {
+    if (!Array.isArray(value) || value.length === 0) {
+      return {};
+    }
 
-    return { attempts, benchmarkDefinition };
+    const { definition, filepath } = value[0];
+    const attempts = value.map(attempt => ({ runs: attempt.runs }));
+
+    return {
+      attempts,
+      definition,
+      filepath: stripRoot(filepath, projectPath),
+    };
   });
 
   return {
     errors: stringifiedStages,
-    test,
+    test: transformedTest,
   };
 };
 
@@ -174,7 +182,7 @@ const benchmarkProject = (projectPath, nodePath) => {
     .then(results => filterUniqueBenchmarkIds(results, projectPath))
     .then(logger.debugAwait('Running benchmarks'))
     .then(results => runBenchmarksInSequence(results, nodePath))
-    .then(results => transformResults(results))
+    .then(results => transformResults(results, projectPath))
     .then(logger.debugId)
     .catch(error => logger.error(error));
 };

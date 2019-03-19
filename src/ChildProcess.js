@@ -19,6 +19,7 @@ const GET_BENCHMARK_DEFINITION_TIMEOUT = 5000;
 class ChildProcess {
   constructor(runnerPath, benchmarkPath, benchmarkId) {
     this.benchmarkId = benchmarkId;
+    this.benchmarkPath = benchmarkPath;
 
     this.childProcess = fork(runnerPath, [
       `--filepath=${benchmarkPath}`,
@@ -63,6 +64,7 @@ class ChildProcess {
 
         resolve({
           definition: this.benchmarkDefinition,
+          filepath: this.benchmarkPath,
           runs: this.state.benchmark.runs,
         });
       };
