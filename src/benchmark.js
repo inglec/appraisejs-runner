@@ -1,7 +1,7 @@
 const listModuleExports = require('list-module-exports');
 const { reduce } = require('lodash/collection');
 const { isEmpty } = require('lodash/lang');
-const { assign, mapValues } = require('lodash/object');
+const { assign, mapValues, pick } = require('lodash/object');
 const { join } = require('path');
 const createPromiseLogger = require('promise-logging');
 const { queue: queuePromises, repeatWhile } = require('promise-utils');
@@ -16,11 +16,13 @@ const PromisePipe = require('./utils/PromisePipe');
 const ChildProcess = require('./ChildProcess');
 const whitelistedModules = require('./whitelisted_modules');
 
+const logger = createPromiseLogger('appraisejs');
 const promisePipe = new PromisePipe();
 
 const discoverBenchmarkFiles = projectPath => findFiles(/\.benchmark.js$/, projectPath);
 
-const getBenchmarkIdsByFile = (...args) => {
+
+const getBenchmarkIdsByFile = async (...args) => {
   const [filepaths, projectPath] = promisePipe.args(...args);
   const errors = [];
 
@@ -35,14 +37,12 @@ const getBenchmarkIdsByFile = (...args) => {
         return undefined;
       }));
 
-  return Promise
-    .all(filepaths.map(getBenchmarkIds))
-    .then((values) => {
-      // Merge each `values` object into a single object
-      const result = assign({}, ...values);
+  const values = await Promise.all(filepaths.map(getBenchmarkIds));
 
-      return promisePipe.return(result, errors, DISCOVER_BENCHMARKS);
-    });
+  // Merge each `values` object into a single object
+  const result = assign({}, ...values);
+
+  return promisePipe.return(result, errors, DISCOVER_BENCHMARKS);
 };
 
 // Check that each benchmark ID is unique across all benchmark files
@@ -94,7 +94,7 @@ const filterUniqueBenchmarkIds = (...args) => {
   return promisePipe.return(unique, errors, VERIFY_UNIQUE_BENCHMARK_IDS);
 };
 
-const runBenchmarksInSequence = (...args) => {
+const runBenchmarksInSequence = async (...args) => {
   const [benchmarkIdsByFile, nodePath] = promisePipe.args(...args);
   const runnerPath = join(nodePath, 'src/runner/index.js');
 
@@ -111,10 +111,15 @@ const runBenchmarksInSequence = (...args) => {
               return true;
             }
 
-            // If an error occurred in the last run, rerun the benchmark
             const { definition: { maxAttempts }, runs } = result;
-            const lastRun = runs[runs.length - 1];
-            return lastRun instanceof Error && i < maxAttempts;
+
+            // If an error occurred in the last run, rerun the benchmark
+            const rerun = 'error' in runs[runs.length - 1] && i < maxAttempts;
+            if (rerun) {
+              logger.debug('rerunning', benchmarkId, `(${i})`);
+            }
+
+            return rerun;
           },
         );
 
@@ -126,14 +131,14 @@ const runBenchmarksInSequence = (...args) => {
   }, {});
 
   // Run each benchmark one-at-a-time
-  return queuePromises(queue).then((results) => {
-    const { resolved, rejected } = results.partition();
-    return promisePipe.return(resolved, rejected, RUN_BENCHMARKS);
-  });
+  const results = await queuePromises(queue);
+  const { resolved, rejected } = results.partition();
+
+  return promisePipe.return(resolved, rejected, RUN_BENCHMARKS);
 };
 
-const transformResults = ({ errors, result }, projectPath) => {
-  // Convert Error objects to strings
+const transformResults = ({ errors, result: benchmarks }, projectPath) => {
+  // Convert stage-specific Error objects to strings
   const stringifiedStages = errors
     .filter(stage => !isEmpty(stage.errors))
     .map(({ errors: stageErrors, stage }) => {
@@ -150,16 +155,15 @@ const transformResults = ({ errors, result }, projectPath) => {
     });
 
   // Reformat test results
-  const transformedTest = mapValues(result, (value) => {
-    if (!Array.isArray(value) || value.length === 0) {
-      return {};
-    }
+  const transformedBenchmarks = mapValues(benchmarks, (attempts) => {
+    // Get benchmark definition and path from one of the attempts
+    const { definition, filepath } = attempts[0];
 
-    const { definition, filepath } = value[0];
-    const attempts = value.map(attempt => ({ runs: attempt.runs }));
+    // Remove definition and filepath from each attempt
+    const transformedAttempts = attempts.map(attempt => pick(attempt, 'runs'));
 
     return {
-      attempts,
+      attempts: transformedAttempts,
       definition,
       filepath: stripRoot(filepath, projectPath),
     };
@@ -167,12 +171,11 @@ const transformResults = ({ errors, result }, projectPath) => {
 
   return {
     errors: stringifiedStages,
-    test: transformedTest,
+    benchmarks: transformedBenchmarks,
   };
 };
 
 const benchmarkProject = (projectPath, nodePath) => {
-  const logger = createPromiseLogger('appraisejs');
   logger.debug('Finding benchmark files');
 
   return discoverBenchmarkFiles(projectPath)

@@ -84,9 +84,13 @@ const runBenchmark = async (benchmark) => {
 
     const result = await promise;
     sendMessage(RUN_BENCHMARK, RESULT, result);
+
+    return result;
   } catch (error) {
     timer.stop();
     sendMessage(RUN_BENCHMARK, ERROR, error.message);
+
+    return { error };
   }
 };
 
@@ -94,7 +98,7 @@ const attemptBenchmark = async (benchmark, runs) => {
   // Run benchmark `runs` times, or until an error occurs
   const results = await repeatWhile(
     () => runBenchmark(benchmark),
-    (result, index) => index < runs && !(result instanceof Error),
+    (result, index) => index === 0 || (index < runs && !('error' in result)),
   );
 
   return results.values();
