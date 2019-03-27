@@ -11,7 +11,7 @@
   },
   "runs": {
     "type": "number",
-    "defaultValue": 1,
+    "defaultValue": 5,
     "minValue": 1,
     "maxValue": 10
   },
