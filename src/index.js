@@ -37,7 +37,7 @@ function main() {
 
   benchmarkProject(args.path, NODE_PATH)
     .then(results => sendResults(results, args.hostPort))
-    .then(({ statusCode }) => logger.info('Worker responded with status', statusCode))
+    .then(({ statusCode }) => logger.debug('Worker responded with status', statusCode))
     .catch((error) => {
       throw error;
     });
