@@ -35,8 +35,14 @@ function main() {
 
   const logger = createLogger('appraisejs');
 
+  let time = new Date().getTime();
+  logger.info(`BEGIN BENCHMARKS AT <<<${time}>>>`);
   benchmarkProject(args.path, NODE_PATH)
-    .then(results => sendResults(results, args.hostPort))
+    .then((results) => {
+      time = new Date().getTime();
+      logger.info(`END BENCHMARKS AT <<<${time}>>>`);
+      return sendResults(results, args.hostPort);
+    })
     .then(({ statusCode }) => logger.debug('Worker responded with status', statusCode))
     .catch((error) => {
       throw error;
